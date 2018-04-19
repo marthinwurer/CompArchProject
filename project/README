@@ -1,0 +1,16 @@
+
+I procrastinated too much. That being said, I only figured out my final architechture
+the night before my second extension was due. The complex addressing modes killed me
+and I coudn't think my way through them.
+
+Opcodes were far more challenging than they should have been. I spent an hour trying to
+figure out what was wrong with my cmp before I just gave up. For some reason the ALU subtraction was
+not working correctly. I'm really at a loss as to why that was happening.
+
+Backdoors are used in branches because I'm not sure how else to do the math for branches without
+killing myself. Speaking of branches, I'm having issues getting my branch values to match yours.
+Even looking at the bits of the opcodes, they are not the values in your output files.
+
+
+
+

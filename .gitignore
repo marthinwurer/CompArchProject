@@ -1,0 +1,13 @@
+.idea/
+*.o
+*.d
+cmake-build-debug/
+archlib/cmake/
+*.mine
+*.diffs
+tests/CMakeCache.txt
+tests/CMakeFiles/
+tests/Makefile
+tests/archlib/
+tests/cmake_install.cmake
+tests/k19
