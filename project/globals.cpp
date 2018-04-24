@@ -8,25 +8,21 @@ const unsigned int ADR_BITS = 16;
 const unsigned int DATA_BITS = 16;
 const unsigned int NUM_REGS = 8;
 
-Bus abus("ABUS", ADR_BITS); // address bus. Used when addresses are to be moved.
-Bus dbus("DBUS", DATA_BITS); // Data Bus. Used when data and instructions are to be moved.
-Bus sbus("SBUS", DATA_BITS); // Setup Bus. Used to set up the operands
-Bus bitbus("BITBUS", DATA_BITS); // bus for setting status registers
+Stage::Stage(string s): A() {
+
+}
+
+void Stage::connect_next(Stage s) {
+
+    A.connectsTo(abus.IN());
+    s.A.connectsTo(abus.OUT());
+
+}
 
 vector<Clearable*> regs;
 
-Clearable N("N", 1);
-Clearable V("V", 1);
-Clearable C("C", 1);
-Clearable Z("Z", 1);
-Clearable sss("SSS", DATA_BITS);
-Clearable ddd("DDD", DATA_BITS);
-Clearable out("OUT", DATA_BITS);
-StorageObject mdr("MDR", DATA_BITS); // Data to be written into, or data most recently read from, memory.
-StorageObject ir("IR", DATA_BITS); // Instruction Register. Instruction being decoded and executed.
-StorageObject xr("XR", ADR_BITS); // Index register. Contains a value to be used in calculating a memory address.
-StorageObject immr("IMMR", DATA_BITS);
-Memory m("Memory", 16, 8, -1, 2, true); // Memory
+Memory im( "InstructionMemory", 32, 8, 0xffff, 4 );
+Memory dm( "DataMemory",  32, 8, 0xffff, 4 );
 BusALU alu("ALU", DATA_BITS); // ALU
 BusALU addr_alu("A_ALU", ADR_BITS); // ALU
 

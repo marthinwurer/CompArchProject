@@ -16,41 +16,60 @@
 typedef unsigned long ulong;
 
 
-struct am_data{
-    bool valid;
-    ulong reg;
-    ulong am;
-    bool memory;
-    bool inc;
-    bool dec;
-    bool D;
-    ulong D_addr;
-    string mnemomic;
-    bool writeback;
+class Stage{
+public:
+    BusALU alu;
+    StorageObject v; // valid
+    Counter pc; // program counter
+    Counter npc; // next program counter
+    StorageObject ir; // instruction
+    StorageObject A; // rs register
+    StorageObject B; // rt register
+    StorageObject imm; // immediate value
+    StorageObject out; // output of previous layer (ir, ?, alu out, read value)
+
+    // busses come out of those registers in this layer
+    Bus pcbus; // out of pc
+    Bus imbus; // out of immediate
+    Bus outbus; // out of out
+    Bus abus; // out of a
+    Bus bbus; // out of b
+
+
+
+
+    explicit Stage(string s);
+
+    void connect_next(Stage s); // connects the next stage to this one. (ie ifid(idex))
+
 };
 
-extern struct am_data dest, src;
+// hardware
+
+extern Stage ifid, idex, exmem, memwb;
 
 
 extern const unsigned int ADR_BITS;
 extern const unsigned int DATA_BITS;
 extern const unsigned int NUM_REGS;
 
-extern Bus abus;
-extern Bus dbus, bitbus, immbus;
-extern Bus sbus; // Setup Bus. Used to set up the operands
-
 extern vector<Clearable*> regs;
-
-extern Clearable sss, ddd, out;
-extern Clearable N, Z, V, C;
+extern Counter pc;
 extern StorageObject mdr;
-extern StorageObject xr;
-extern StorageObject immr;
-extern StorageObject ir;
-extern Memory m;
+extern Memory im; // instruction memory
+extern Memory dm; // data memory
+
 extern BusALU alu;
 extern BusALU addr_alu; // ALU
+
+extern Bus writeback;
+extern Bus pcbus;
+
+
+
+
+
+// other globals
 
 extern bool halt, do_writeback, addressing_failed;
 
