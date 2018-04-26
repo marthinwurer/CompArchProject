@@ -15,7 +15,7 @@
 int main( int argc, char * argv[]) {
 
 //    CPUObject::debug |= CPUObject::trace | CPUObject::memload;
-    cout << oct;
+    cout << hex;
 
     // get command line input
     // taken from dumbest
@@ -24,12 +24,13 @@ int main( int argc, char * argv[]) {
         exit(1);
     }
 
-    m.load(argv[1]);
+    im.load(argv[1]);
+    dm.load(argv[1]);
 
 
     setup();
     // entry point hack
-    regs[7]->latchFrom(m.READ());
+    pc.latchFrom(im.READ());
     Clock::tick();
 
     try {
@@ -37,6 +38,18 @@ int main( int argc, char * argv[]) {
 
         // main loop
         while (!halt) {
+
+            // Test for stall first
+
+            // test for
+
+            // nops
+            // break
+            /*
+             * load
+             * alu
+             *
+             */
 
         }
     }catch( ArchLibError & e){

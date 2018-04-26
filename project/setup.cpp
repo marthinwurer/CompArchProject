@@ -23,6 +23,7 @@ void setup(){
     // memory
     im.MAR().connectsTo(pcbus.OUT());
     ifid.ir.connectsTo(im.READ());
+    pc.connectsTo(im.READ());
 
     dm.MAR().connectsTo(exmem.outbus.OUT());
     exmem.B.connectsTo(dm.WRITE());

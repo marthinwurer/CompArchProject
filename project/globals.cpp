@@ -16,6 +16,7 @@ void Stage::connect_next(Stage s) {
 
     A.connectsTo(abus.IN());
     s.A.connectsTo(abus.OUT());
+    // TODO
 
 }
 

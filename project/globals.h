@@ -18,7 +18,7 @@ typedef unsigned long ulong;
 
 class Stage{
 public:
-    BusALU alu;
+    BusALU alu; // todo
     StorageObject v; // valid
     Counter pc; // program counter
     Counter npc; // next program counter
