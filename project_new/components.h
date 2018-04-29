@@ -31,11 +31,11 @@ class idex_reg {
 
 		Clearable valid;
 		StorageObject pc;
-		StorageObject new_pc;
 		StorageObject ir;
 		StorageObject a;
 		StorageObject b;
 		StorageObject imm;
+		Clearable cond;
 };
 
 class exmem_reg {
@@ -44,11 +44,9 @@ class exmem_reg {
 
 		Clearable valid;
 		StorageObject pc;
-		StorageObject new_pc;
 		StorageObject ir;
 		StorageObject b;
 		StorageObject c;
-		Clearable cond;
 };
 
 class memwb_reg {
@@ -57,7 +55,6 @@ class memwb_reg {
 
 		Clearable valid;
 		StorageObject pc;
-		StorageObject new_pc;
 		StorageObject ir;
 		StorageObject c;
 		StorageObject memory_data;
@@ -96,11 +93,11 @@ extern Memory data_mem;
 //extern BusALU if_pc_incrementer;
 extern Bus if_instruction_mem_addr_bus;
 extern Bus if_pc_forward;
+extern Bus if_branch_bus;
 
 //id stage busses and ALUs
 extern Bus id_valid_forward;
 extern Bus id_pc_forward;
-extern Bus id_newpc_forward;
 extern Bus id_ir_forward;
 extern Bus id_a_load_bus;
 extern Bus id_b_load_bus;
@@ -111,20 +108,20 @@ extern StorageObject id_sh_field_shift_amount;
 extern StorageObject id_shift_temp_reg;
 extern Bus id_shift_temp_reg_load_bus;
 extern StorageObject id_shift_field_mask;
+extern StorageObject id_jump_target_mask;
 
 //ex stage busses and ALUs
 extern Bus ex_valid_forward;
 extern Bus ex_pc_forward;
-extern Bus ex_newpc_forward;
 extern Bus ex_ir_forward;
 extern Bus ex_b_forward;
 extern BusALU ex_alu;
 extern StorageObject ex_lui_shift_amount;
+extern StorageObject ex_jump_link_return_offset;
 
 //mem stage busses and ALUs
 extern Bus mem_valid_forward;
 extern Bus mem_pc_forward;
-extern Bus mem_newpc_forward;
 extern Bus mem_ir_forward;
 extern Bus mem_c_forward;
 extern Bus mem_data_mem_addr_bus;

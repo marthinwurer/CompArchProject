@@ -15,7 +15,14 @@ void connect_components(void) {
 
 	if_r.pc.connectsTo(if_pc_forward.IN());
 	ifid_r.pc.connectsTo(if_pc_forward.OUT());
-	//TODO: add connections needed for a branch
+	ifid_r.new_pc.connectsTo(if_pc_forward.OUT());
+
+	if_r.pc.connectsTo(if_branch_bus.OUT());
+//	ifid_r.new_pc.connectsTo(if_branch_bus.OUT());
+
+	//for branch instructions
+	if_r.pc.connectsTo(id_imm_alu.OUT());
+//	ifid_r.new_pc.connectsTo(id_imm_alu.OUT());
 
 	//ID stage connections
 	connect_reg_file_to_bus_input(id_a_load_bus);
@@ -35,9 +42,6 @@ void connect_components(void) {
 	ifid_r.pc.connectsTo(id_pc_forward.IN());
 	idex_r.pc.connectsTo(id_pc_forward.OUT());
 
-	ifid_r.new_pc.connectsTo(id_newpc_forward.IN());
-	idex_r.new_pc.connectsTo(id_newpc_forward.OUT());
-
 	ifid_r.valid.connectsTo(id_valid_forward.IN());
 	idex_r.valid.connectsTo(id_valid_forward.OUT());
 
@@ -48,6 +52,11 @@ void connect_components(void) {
 
 	connect_reg_file_to_bus_input(id_shift_temp_reg_load_bus);
 	id_shift_temp_reg.connectsTo(id_shift_temp_reg_load_bus.OUT());
+
+	id_jump_target_mask.connectsTo(id_imm_alu.OP2());
+	id_shift_temp_reg.connectsTo(if_branch_bus.IN());
+
+	ifid_r.new_pc.connectsTo(id_imm_alu.OP2());
 
 	//EX stage connections
 	idex_r.ir.connectsTo(ex_ir_forward.IN());
@@ -66,16 +75,14 @@ void connect_components(void) {
 	idex_r.b.connectsTo(ex_b_forward.IN());
 	exmem_r.b.connectsTo(ex_b_forward.OUT());
 
-	idex_r.new_pc.connectsTo(ex_alu.OP1());
-
 	idex_r.pc.connectsTo(ex_pc_forward.IN());
 	exmem_r.pc.connectsTo(ex_pc_forward.OUT());
 
-	idex_r.new_pc.connectsTo(ex_newpc_forward.IN());
-	exmem_r.new_pc.connectsTo(ex_newpc_forward.OUT());
-
 	idex_r.valid.connectsTo(ex_valid_forward.IN());
 	exmem_r.valid.connectsTo(ex_valid_forward.OUT());
+
+	idex_r.pc.connectsTo(ex_alu.OP1());
+	ex_jump_link_return_offset.connectsTo(ex_alu.OP2());
 
 	//MEM stage connections
 	exmem_r.ir.connectsTo(mem_ir_forward.IN());
@@ -91,9 +98,6 @@ void connect_components(void) {
 
 	exmem_r.pc.connectsTo(mem_pc_forward.IN());
 	memwb_r.pc.connectsTo(mem_pc_forward.OUT());
-
-	exmem_r.new_pc.connectsTo(mem_newpc_forward.IN());
-	memwb_r.new_pc.connectsTo(mem_newpc_forward.OUT());
 
 	exmem_r.valid.connectsTo(mem_valid_forward.IN());
 	memwb_r.valid.connectsTo(mem_valid_forward.OUT());

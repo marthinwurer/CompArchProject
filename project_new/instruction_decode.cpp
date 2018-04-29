@@ -32,7 +32,25 @@ namespace z11 {
 		"SLLV",
 		"SRLV",
 		"SRAV",
-		"???????"
+		"???????",
+		"ADDIU",
+		"SLTIU",
+		"LB",
+		"LH",
+		"LBU",
+		"LHU",
+		"SB",
+		"SH",
+		"BLTZ",
+		"BLTZAL",
+		"BGEZ",
+		"BGEZAL",
+		"BLEZ",
+		"BGTZ",
+		"SYSCALL",
+		"ADDU",
+		"SUBU",
+		"NOR"
 	};
 }
 
@@ -52,6 +70,8 @@ z11::op decode_instruction(StorageObject &ir) {
 			return z11::JAL;
 		case 16: //ADDI
 			return z11::ADDI;
+		case 17: //ADDIU
+			return z11::ADDIU;
 		case 20: //ANDI
 			return z11::ANDI;
 		case 21: //ORI
@@ -60,16 +80,42 @@ z11::op decode_instruction(StorageObject &ir) {
 			return z11::XORI;
 		case 24: //SLTI
 			return z11::SLTI;
+		case 25: //SLTIU
+			return z11::SLTIU;
+		case 32: //LB
+			return z11::LB;
+		case 33: //LH
+			return z11::LH;
 		case 35: //LW
 			return z11::LW;
+		case 36: //LBU
+			return z11::LBU;
+		case 37: //LHU
+			return z11::LHU;
 		case 39: //LUI
 			return z11::LUI;
+		case 40: //SB
+			return z11::SB;
+		case 41: //SH
+			return z11::SH;
 		case 43: //SW
 			return z11::SW;
+		case 50: //BLTZ
+			return z11::BLTZ;
+		case 51: //BLTZAL
+			return z11::BLTZAL;
+		case 58: //BGEZ
+			return z11::BGEZ;
+		case 59: //BGEZAL
+			return z11::BGEZAL;
 		case 60: //BEQ
 			return z11::BEQ;
 		case 61: //BNE
 			return z11::BNE;
+		case 62: //BLEZ
+			return z11::BLEZ;
+		case 63: //BGTZ
+			return z11::BGTZ;
 		default:
 			return z11::UNKNOWN;
 	}
@@ -83,18 +129,26 @@ z11::op decode_special_instruction(StorageObject &ir) {
 			return z11::JR;
 		case 3: //JALR
 			return z11::JALR;
-		case 7: //BREAL
+		case 6: //SYSCALL
+			return z11::SYSCALL;
+		case 7: //BREAK
 			return z11::BREAK;
 		case 16: //ADD
 			return z11::ADD;
+		case 17: //ADDU
+			return z11::ADDU;
 		case 18: //SUB
 			return z11::SUB;
+		case 19: //SUBU
+			return z11::SUBU;
 		case 20: //AND
 			return z11::AND;
 		case 21: //OR
 			return z11::OR;
 		case 22: //XOR
 			return z11::XOR;
+		case 23: //NOR
+			return z11::NOR;
 		case 24: //SLT
 			return z11::SLT;
 		case 25: //SLTU
@@ -117,23 +171,6 @@ z11::op decode_special_instruction(StorageObject &ir) {
 }
 
 
-bool is_special_instruction(z11::op instruction) {
-	switch(instruction) {
-		case z11::NOP:
-		case z11::J:
-		case z11::JAL:
-		case z11::ADDI:
-		case z11::ANDI:
-		case z11::ORI:
-		case z11::XORI:
-		case z11::SLTI:
-		case z11::LW:
-		case z11::LUI:
-		case z11::SW:
-		case z11::BEQ:
-		case z11::BNE:
-			return false;
-	}
-
-	return true;
+bool is_special_instruction(StorageObject &ir) {
+	return (ir(31, 26) == 0);
 }

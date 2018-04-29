@@ -5,6 +5,7 @@
 
 namespace z11 {
 	enum op {
+		//valid and implemented instructions
 		NOP = 0,
 		J = 1,
 		JAL = 2,
@@ -35,7 +36,27 @@ namespace z11 {
 		SLLV = 27,
 		SRLV = 28,
 		SRAV = 29,
-		UNKNOWN = 30
+		//instruction for invalid opcodes
+		UNKNOWN = 30,
+		//unimplemented instructions
+		ADDIU = 31,
+		SLTIU = 32,
+		LB = 33,
+		LH = 34,
+		LBU = 35,
+		LHU = 36,
+		SB = 37,
+		SH = 38,
+		BLTZ = 39,
+		BLTZAL = 40,
+		BGEZ = 41,
+		BGEZAL = 42,
+		BLEZ = 43,
+		BGTZ = 44,
+		SYSCALL = 45,
+		ADDU = 46,
+		SUBU = 47,
+		NOR = 48
 	};
 
 	extern const char *mnemonics[];
@@ -43,6 +64,6 @@ namespace z11 {
 
 z11::op decode_instruction(StorageObject &ir);
 
-bool is_special_instruction(z11::op instruction);
+bool is_special_instruction(StorageObject &ir);
 
 #endif // _INSTRUCTION_DECODE_H_

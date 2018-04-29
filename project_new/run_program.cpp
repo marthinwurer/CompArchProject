@@ -14,7 +14,27 @@ void bootstrap_program(void) {
 	Clock::tick();
 }
 
-//TODO: add busses to propogate valid bits through the stages, rather than just setting them
+bool id_instruction_is_jump(void) {
+	switch(decode_instruction(ifid_r.ir)) {
+		case z11::J:
+		case z11::JAL:
+		case z11::JR:
+		case z11::JALR:
+			return true;
+	}
+
+	return false;
+}
+
+bool id_instruction_is_taken_branch(void) {
+	switch(decode_instruction(ifid_r.ir)) {
+		case z11::BEQ:
+		case z11::BNE:
+			return (idex_r.cond.value());
+	}
+
+	return false;
+}
 
 void fetch_part1(void) {
 	if_instruction_mem_addr_bus.IN().pullFrom(if_r.pc);
@@ -27,19 +47,45 @@ void fetch_part2(void) {
 	ifid_r.ir.latchFrom(instruction_mem.READ());
 
 //TODO: add code for branch instructions
-	if_r.pc.perform(Counter::incr4);
-	ifid_r.new_pc.perform(Counter::incr4);
+
+//TODO: have to also let the NPC latch from the result of branch or jump
+	//do (::incr4) to NPC on first tick of decode stage
+	//use NPC for branch calculations in second tick of decode stage
+	//remove NPC forwarding and NPC registers from later stages of pipeline
+
+	if(id_instruction_is_jump()) {
+		if_r.pc.latchFrom(if_branch_bus.OUT());
+//		ifid_r.new_pc.latchFrom(if_branch_bus.OUT());
+	}
+	else if(id_instruction_is_taken_branch()) {
+		if_r.pc.latchFrom(id_imm_alu.OUT());
+//		ifid_r.new_pc.latchFrom(id_imm_alu.OUT());
+	}
+	else { //not a branch or jump
+		if_r.pc.perform(Counter::incr4);
+//		ifid_r.new_pc.perform(Counter::incr4);
+	}
 
 	if_pc_forward.IN().pullFrom(if_r.pc);
 	ifid_r.pc.latchFrom(if_pc_forward.OUT());
+	ifid_r.new_pc.latchFrom(if_pc_forward.OUT());
 
 	ifid_r.valid.set();
+}
+
+void decode_sign_extend_branch_offset(void) {
+	id_imm_alu.OP1().pullFrom(ifid_r.ir);
+	id_imm_alu.OP2().pullFrom(id_imm_sign_extend_mask);
+	id_imm_alu.perform(BusALU::op_extendSign);
+	id_shift_temp_reg.latchFrom(id_imm_alu.OUT());
 }
 
 void decode_part1(void) {
 	if(!ifid_r.valid.value()) {
 		return;
 	}
+
+//use id_shift_temp_reg for computing jump offsets as well
 
 	switch(decode_instruction(ifid_r.ir)) {
 		case z11::SLL:
@@ -54,10 +100,39 @@ void decode_part1(void) {
 		case z11::SLLV:
 		case z11::SRLV:
 		case z11::SRAV:
+		case z11::JR:
+		case z11::JALR:
+			//load 'rs' into temp register
 			id_shift_temp_reg_load_bus.IN().pullFrom(
 				GPR(ifid_r.ir(25, 21)));
 			id_shift_temp_reg.latchFrom(
 				id_shift_temp_reg_load_bus.OUT());
+			break;
+
+		case z11::J:
+		case z11::JAL:
+			id_imm_alu.OP1().pullFrom(ifid_r.ir);
+			id_imm_alu.OP2().pullFrom(id_jump_target_mask);
+			id_imm_alu.perform(BusALU::op_and);
+			id_shift_temp_reg.latchFrom(id_imm_alu.OUT());
+			break;
+
+		case z11::BEQ:
+			decode_sign_extend_branch_offset();
+			if(GPR(ifid_r.ir(25, 21)).value() == GPR(ifid_r.ir(20, 16)).value()) {
+				idex_r.cond.set();
+			}
+			else {idex_r.cond.clear();}
+			ifid_r.new_pc.perform(Counter::incr4);
+			break;
+
+		case z11::BNE:
+			decode_sign_extend_branch_offset();
+			if(GPR(ifid_r.ir(25, 21)).value() != GPR(ifid_r.ir(20, 16)).value()) {
+				idex_r.cond.set();
+			}
+			else {idex_r.cond.clear();}
+			ifid_r.new_pc.perform(Counter::incr4);
 			break;
 	}
 }
@@ -123,6 +198,22 @@ void decode_part2(void) {
 			idex_r.imm.latchFrom(id_imm_alu.OUT());
 			break;
 
+		case z11::J:
+		case z11::JAL:
+		case z11::JR:
+		case z11::JALR:
+			if_branch_bus.IN().pullFrom(id_shift_temp_reg);
+			break;
+
+		case z11::BEQ:
+		case z11::BNE:
+			if(idex_r.cond.value()) {
+				id_imm_alu.OP1().pullFrom(id_shift_temp_reg);
+				id_imm_alu.OP2().pullFrom(ifid_r.new_pc);
+				id_imm_alu.perform(BusALU::op_add);
+			}
+			break;
+
 		//non-immediate instructions, do nothing
 		case z11::ADD:
 		case z11::SUB:
@@ -134,24 +225,13 @@ void decode_part2(void) {
 		case z11::NOP:
 		case z11::HALT:
 		case z11::BREAK:
-		case z11::UNKNOWN:
-			break;
-
-		//TODO: unimplemented cases
-		case z11::J:
-		case z11::JAL:
-		case z11::BEQ:
-		case z11::BNE:
-		case z11::JR:
-		case z11::JALR:
+		case z11::UNKNOWN: //invalid instructions
+		default: //valid but unimplemented instructions
 			break;
 	}
 
 	id_pc_forward.IN().pullFrom(ifid_r.pc);
 	idex_r.pc.latchFrom(id_pc_forward.OUT());
-
-	id_newpc_forward.IN().pullFrom(ifid_r.new_pc);
-	idex_r.new_pc.latchFrom(id_newpc_forward.OUT());
 }
 
 void execute_part1(void) {
@@ -185,9 +265,6 @@ void execute_part2(void) {
 
 	ex_pc_forward.IN().pullFrom(idex_r.pc);
 	exmem_r.pc.latchFrom(ex_pc_forward.OUT());
-
-	ex_newpc_forward.IN().pullFrom(idex_r.new_pc);
-	exmem_r.new_pc.latchFrom(ex_newpc_forward.OUT());
 
 	ex_ir_forward.IN().pullFrom(idex_r.ir);
 	exmem_r.ir.latchFrom(ex_ir_forward.OUT());
@@ -297,20 +374,24 @@ void execute_part2(void) {
 			ex_alu.perform(BusALU::op_rashift);
 			break;
 
+		case z11::JAL:
+		case z11::JALR:
+			ex_alu.OP1().pullFrom(idex_r.pc);
+			ex_alu.OP2().pullFrom(ex_jump_link_return_offset);
+			exmem_r.c.latchFrom(ex_alu.OUT());
+			ex_alu.perform(BusALU::op_add);
+			break;
+
 		//do nothing
 		case z11::NOP:
 		case z11::HALT:
-			break;
-
-		//TODO: unimplemented
 		case z11::J:
-		case z11::JAL:
+		case z11::JR:
 		case z11::BEQ:
 		case z11::BNE:
-		case z11::JR:
-		case z11::JALR:
 		case z11::BREAK:
-		case z11::UNKNOWN:
+		case z11::UNKNOWN: //invalid instructions
+		default: //valid but unimplemented instructions
 			break;
 	}
 }
@@ -349,18 +430,16 @@ void memory_part1(void) {
 		case z11::SLLV:
 		case z11::SRLV:
 		case z11::SRAV:
-			break;
-
-		//TODO: unimplemented cases
+		case z11::HALT:
+		case z11::BREAK:
 		case z11::J:
 		case z11::JAL:
-		case z11::BEQ:
-		case z11::BNE:
-		case z11::HALT:
 		case z11::JR:
 		case z11::JALR:
-		case z11::BREAK:
-		case z11::UNKNOWN:
+		case z11::BEQ:
+		case z11::BNE:
+		case z11::UNKNOWN: //invalid instructions
+		default: //valid but unimplemented instructions
 			break;
 	}
 }
@@ -375,9 +454,6 @@ void memory_part2(void) {
 
 	mem_pc_forward.IN().pullFrom(exmem_r.pc);
 	memwb_r.pc.latchFrom(mem_pc_forward.OUT());
-
-	mem_newpc_forward.IN().pullFrom(exmem_r.new_pc);
-	memwb_r.new_pc.latchFrom(mem_newpc_forward.OUT());
 
 	mem_ir_forward.IN().pullFrom(exmem_r.ir);
 	memwb_r.ir.latchFrom(mem_ir_forward.OUT());
@@ -404,6 +480,8 @@ void memory_part2(void) {
 		case z11::SLLV:
 		case z11::SRLV:
 		case z11::SRAV:
+		case z11::JAL:
+		case z11::JALR:
 			mem_c_forward.IN().pullFrom(exmem_r.c);
 			memwb_r.c.latchFrom(mem_c_forward.OUT());
 			break;
@@ -421,17 +499,13 @@ void memory_part2(void) {
 		//do nothing cases
 		case z11::NOP:
 		case z11::HALT:
-			break;
-
-		//TODO: unimplemented cases
 		case z11::J:
-		case z11::JAL:
+		case z11::JR:
 		case z11::BEQ:
 		case z11::BNE:
-		case z11::JR:
-		case z11::JALR:
 		case z11::BREAK:
-		case z11::UNKNOWN:
+		case z11::UNKNOWN: //invalid instructions
+		default: //valid but unimplemented instructions
 			break;
 	}
 }
@@ -459,8 +533,6 @@ void writeback_part2(void) {
 
 	wb_ir_forward.IN().pullFrom(memwb_r.ir);
 	post_wb_r.ir.latchFrom(wb_ir_forward.OUT());
-//TODO: make sure we block writes to r0
-
 
 	switch(decode_instruction(memwb_r.ir)) {
 		//immediate ALU instructions
@@ -489,6 +561,7 @@ void writeback_part2(void) {
 		case z11::SLLV:
 		case z11::SRLV:
 		case z11::SRAV:
+		case z11::JALR:
 			//place result in 'rd'
 			writeback_to_GPR(memwb_r.ir(15, 11), memwb_r.c);
 //			wb_register_write_bus.IN().pullFrom(memwb_r.c);
@@ -503,23 +576,23 @@ void writeback_part2(void) {
 			break;
 
 		case z11::HALT:
+		case z11::UNKNOWN: //invalid instructions
+		default: //valid but unimplemented instructions
 			halted = true;
+			break;
+
+		case z11::JAL:
+			writeback_to_GPR(31, memwb_r.c);
 			break;
 
 		//do nothing cases
 		case z11::NOP:
 		case z11::SW:
-			break;
-
-		//TODO: unimplemented cases
 		case z11::J:
-		case z11::JAL:
+		case z11::JR:
 		case z11::BEQ:
 		case z11::BNE:
-		case z11::JR:
-		case z11::JALR:
 		case z11::BREAK:
-		case z11::UNKNOWN:
 			break;
 	}
 }
@@ -555,7 +628,7 @@ void print_execution_record(void) {
 
 	z11::op operation = decode_instruction(post_wb_r.ir);
 
-	if(is_special_instruction(operation)) {
+	if(is_special_instruction(post_wb_r.ir)) {
 		std::cout << " " << std::hex << std::setw(2) <<
 			std::setfill('0') << post_wb_r.ir(5, 0);
 	}
@@ -594,6 +667,7 @@ void print_execution_record(void) {
 		case z11::SLLV:
 		case z11::SRLV:
 		case z11::SRAV:
+		case z11::JALR:
 			std::cout << " " << std::hex <<
 				GPR(post_wb_r.ir(15, 11));
 			break;
@@ -602,20 +676,20 @@ void print_execution_record(void) {
 			print_break_information();
 			break;
 
+		case z11::JAL:
+			std::cout << " " << std::hex << GPR(31);
+			break;
+
 		//do nothing cases
 		case z11::HALT:
 		case z11::NOP:
 		case z11::SW:
-			break;
-
-		//TODO: unimplemented cases
 		case z11::J:
-		case z11::JAL:
+		case z11::JR:
 		case z11::BEQ:
 		case z11::BNE:
-		case z11::JR:
-		case z11::JALR:
-		case z11::UNKNOWN:
+		case z11::UNKNOWN: //invalid instructions
+		default: //valid but unimplemented instructions
 			break;
 	}
 
@@ -623,8 +697,16 @@ void print_execution_record(void) {
 
 	if(halted) {
 		std::cout << "Machine Halted - ";
-		if(operation == z11::HALT) {
-			std::cout << "HALT instruction executed";
+		switch(operation) {
+			case z11::HALT:
+				std::cout << "HALT instruction executed";
+				break;
+			case z11::UNKNOWN:
+				std::cout << "undefined instruction";
+				break;
+			default:
+				std::cout << "unimplemented instruction";
+				break;
 		}
 
 		std::cout << std::endl;

@@ -91,27 +91,24 @@ ifid_reg::ifid_reg(void) :
 idex_reg::idex_reg(void) :
 	valid("valid", 1, 0),
 	pc("PC", ADDR_WIDTH, 0),
-	new_pc("new PC", ADDR_WIDTH, 0),
 	ir("IR", WORD_WIDTH, 0),
 	a("A", WORD_WIDTH, 0),
 	b("B", WORD_WIDTH, 0),
-	imm("IMM", WORD_WIDTH, 0)
+	imm("IMM", WORD_WIDTH, 0),
+	cond("cond", 1, 0)
 {}
 
 exmem_reg::exmem_reg(void) :
 	valid("valid", 1, 0),
 	pc("PC", ADDR_WIDTH, 0),
-	new_pc("new PC", ADDR_WIDTH, 0),
 	ir("IR", WORD_WIDTH, 0),
 	b("B", WORD_WIDTH, 0),
-	c("C", WORD_WIDTH, 0),
-	cond("cond", 1, 0)
+	c("C", WORD_WIDTH, 0)
 {}
 
 memwb_reg::memwb_reg(void) :
 	valid("valid", 1, 0),
 	pc("PC", ADDR_WIDTH, 0),
-	new_pc("new PC", ADDR_WIDTH, 0),
 	ir("IR", WORD_WIDTH, 0),
 	c("C", WORD_WIDTH, 0),
 	memory_data("memory data", WORD_WIDTH, 0)
@@ -135,11 +132,11 @@ post_wb_reg post_wb_r{};
 //BusALU if_pc_incrementer("if_pc_incremented", WORD_WIDTH);
 Bus if_instruction_mem_addr_bus("if_instruction_mem_addr_bus", ADDR_WIDTH);
 Bus if_pc_forward("if_pc_forward", WORD_WIDTH);
+Bus if_branch_bus("if_branch_bus", ADDR_WIDTH);
 
 //id stage busses and ALUs
 Bus id_valid_forward("id_valid_forward", 1);
 Bus id_pc_forward("if_pc_forward", WORD_WIDTH);
-Bus id_newpc_forward("if_newpc_forward", WORD_WIDTH);
 Bus id_ir_forward("id_ir_forward", WORD_WIDTH);
 Bus id_a_load_bus("id_a_load_bus", WORD_WIDTH);
 Bus id_b_load_bus("id_b_load_bus", WORD_WIDTH);
@@ -150,20 +147,20 @@ StorageObject id_sh_field_shift_amount("id_sh_field_shift_amount", WORD_WIDTH, 0
 StorageObject id_shift_temp_reg("id_shift_temp_reg", WORD_WIDTH, 0);
 Bus id_shift_temp_reg_load_bus("id_shift_temp_reg_load_bus", WORD_WIDTH);
 StorageObject id_shift_field_mask("id_shift_field_mask", WORD_WIDTH, 0x0000001F);
+StorageObject id_jump_target_mask("id_jump_target_mask", WORD_WIDTH, 0x03FFFFFF);
 
 //ex stage busses and ALUs
 Bus ex_valid_forward("ex_valid_forward", 1);
 Bus ex_pc_forward("ex_pc_forward", WORD_WIDTH);
-Bus ex_newpc_forward("ex_newpc_forward", WORD_WIDTH);
 Bus ex_ir_forward("ex_ir_forward", WORD_WIDTH);
 Bus ex_b_forward("ex_b_forward", WORD_WIDTH);
 BusALU ex_alu("ex_alu", WORD_WIDTH);
 StorageObject ex_lui_shift_amount("ex_lui_shift_amount", WORD_WIDTH, 0x00000010);
+StorageObject ex_jump_link_return_offset("ex_jump_link_return_offset", WORD_WIDTH, 0x00000008);
 
 //mem stage busses and ALUs
 Bus mem_valid_forward("mem_valid_forward", 1);
 Bus mem_pc_forward("mem_pc_forward", WORD_WIDTH);
-Bus mem_newpc_forward("mem_newpc_forward", WORD_WIDTH);
 Bus mem_ir_forward("mem_ir_forward", WORD_WIDTH);
 Bus mem_c_forward("mem_c_forward", WORD_WIDTH);
 Bus mem_data_mem_addr_bus("mem_data_mem_addr_bus", ADDR_WIDTH);
