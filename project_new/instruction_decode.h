@@ -76,4 +76,8 @@ bool is_immediate_alu_instruction(z11::op instruction);
 
 bool is_load_instruction(z11::op instruction);
 
+bool is_store_instruction(z11::op instruction);
+
+bool is_branch_instruction(z11::op instruction);
+
 #endif // _INSTRUCTION_DECODE_H_

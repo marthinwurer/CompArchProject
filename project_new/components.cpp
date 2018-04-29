@@ -175,3 +175,7 @@ Bus wb_valid_forward("wb_valid_forward", 1);
 //forwarding busses
 Bus idex_a_fill("idex_a_fill", WORD_WIDTH);
 Bus idex_b_fill("idex_b_fill", WORD_WIDTH);
+
+//stalling busses and constants
+Bus idex_nop_insert_bus("idex_nop_insert_bus", WORD_WIDTH);
+StorageObject stalling_nop_constant("stalling_nop_constant", WORD_WIDTH, 0x04000000);

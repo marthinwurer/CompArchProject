@@ -39,31 +39,20 @@ bool id_instruction_is_taken_branch(void) {
 void fetch_part1(void) {
 	if_instruction_mem_addr_bus.IN().pullFrom(if_r.pc);
 	instruction_mem.MAR().latchFrom(if_instruction_mem_addr_bus.OUT());
-//TODO: add code for branch instructions
 }
 
 void fetch_part2(void) {
 	instruction_mem.read();
 	ifid_r.ir.latchFrom(instruction_mem.READ());
 
-//TODO: add code for branch instructions
-
-//TODO: have to also let the NPC latch from the result of branch or jump
-	//do (::incr4) to NPC on first tick of decode stage
-	//use NPC for branch calculations in second tick of decode stage
-	//remove NPC forwarding and NPC registers from later stages of pipeline
-
 	if(id_instruction_is_jump()) {
 		if_r.pc.latchFrom(if_branch_bus.OUT());
-//		ifid_r.new_pc.latchFrom(if_branch_bus.OUT());
 	}
 	else if(id_instruction_is_taken_branch()) {
 		if_r.pc.latchFrom(id_imm_alu.OUT());
-//		ifid_r.new_pc.latchFrom(id_imm_alu.OUT());
 	}
 	else { //not a branch or jump
 		if_r.pc.perform(Counter::incr4);
-//		ifid_r.new_pc.perform(Counter::incr4);
 	}
 
 	if_pc_forward.IN().pullFrom(if_r.pc);
@@ -263,6 +252,10 @@ long gpr_written_by_wb_stage_instruction(void) {
 }
 
 void execute_part1(void) {
+	if(!idex_r.valid.value()) {
+		return;
+	}
+
 		//vvvvvvvvvvvvvvvvv Have this function only return results if the operation in that stage is of the right 'type'
 	//get GPR written to by	mem stage instruction (if any) --- if something is comming from mem, it will be in 'c' register
 		//this determination will involve a case statement that considers R-R ALU, ALU imm, and loads
@@ -283,8 +276,10 @@ void execute_part1(void) {
 
 	z11::op instruction = decode_instruction(idex_r.ir);
 
-	long mem_stage_gpr = gpr_written_by_mem_stage_instruction();
-	long wb_stage_gpr = gpr_written_by_wb_stage_instruction();
+	long mem_stage_gpr = ((exmem_r.valid()) ?
+		gpr_written_by_mem_stage_instruction() : 0);
+	long wb_stage_gpr = ((memwb_r.valid()) ?
+		gpr_written_by_wb_stage_instruction() : 0);
 
 	//we assume forwarding is always needed for 'rs'
 	if((mem_stage_gpr) && (mem_stage_gpr == RS(idex_r.ir))) {
@@ -782,24 +777,100 @@ void print_execution_record(void) {
 	}
 }
 
+bool must_stall_id_phase(void) {
+	//if load instruction in ID/EX
+	if(idex_r.valid.value() && is_load_instruction(decode_instruction(idex_r.ir))) {
+		//if IF/ID instruction is (R-R ALU, ALU imm, load, store, branch)
+		//TODO: does this include JAL and JALR?
+		z11::op ifid_ins = decode_instruction(ifid_r.ir);
+		if(is_register_alu_instruction(ifid_ins) ||
+			is_immediate_alu_instruction(ifid_ins) ||
+			is_load_instruction(ifid_ins) ||
+			is_store_instruction(ifid_ins) ||
+			is_branch_instruction(ifid_ins)) {
+
+			//check the load's 'rt' against the other instruction's 'rs'
+			if(RT(idex_r.ir) == RS(ifid_r.ir)) {
+				//if the same, stall
+				return true;
+			}
+		}
+
+		//if IF/ID instruction is R-R ALU:
+		if(is_register_alu_instruction(ifid_ins)) {
+			//check the load's 'rt' against the other instruction's 'rt'
+			if(RT(idex_r.ir) == RT(ifid_r.ir)) {
+				//if the same, stall
+				return true;
+			}
+		}
+	}
+
+	//if load instruction in EX/MEM
+	if(exmem_r.valid.value() && is_load_instruction(decode_instruction(exmem_r.ir))) {
+		//if IF/ID instruction is branch
+		if(is_branch_instruction(decode_instruction(ifid_r.ir))) {
+			//check the load's 'rt' against the other instructions 'rs'
+			if(RT(exmem_r.ir) == RS(ifid_r.ir)) {
+				//if the same, stall
+				return true;
+			}
+			//check the load's 'rt' against the other instructions 'rt'
+			if(RT(exmem_r.ir) == RT(ifid_r.ir)) {
+				//if the same, stall
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+//implement stalling in a way that matches the example soluion. would have
+//	preffered to use valid registers, but this will allow us to try for 0-diffs
+void insert_nop_into_idex_reg(void) {
+	idex_r.pc.perform(Counter::incr4);
+
+	idex_nop_insert_bus.IN().pullFrom(stalling_nop_constant);
+	idex_r.ir.latchFrom(idex_nop_insert_bus.OUT());
+}
+
 void run_program(void) {
 	bootstrap_program();
 	int ctr = 0;
 
 	while(!halted) {
-		fetch_part1();
-		decode_part1();
+
+//		s = (stalling ID stage necessary)
+		bool stall_id_phase = must_stall_id_phase();
+
+		//if (!s):
+		if(!stall_id_phase) {
+			fetch_part1();
+			decode_part1();
+		}
+
 		execute_part1();
 		memory_part1();
 		writeback_part1();
 		Clock::tick();
 
-		fetch_part2();
-		decode_part2();
+		//if (!s):
+		if(!stall_id_phase) {
+			fetch_part2();
+			decode_part2();
+		}
+		else {
+			//the example solution works by inserting a NOP, rather than using valid bits
+			//idex_r.valid.clear();
+
+			insert_nop_into_idex_reg();
+		}
 		execute_part2();
 		memory_part2();
 		writeback_part2();
 		Clock::tick();
+
 
 		print_execution_record();
 

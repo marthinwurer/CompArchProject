@@ -129,6 +129,11 @@ void connect_components(void) {
 	exmem_r.c.connectsTo(idex_b_fill.IN());
 	memwb_r.c.connectsTo(idex_b_fill.IN());
 	idex_r.b.connectsTo(idex_b_fill.OUT());
+
+
+	//stalling connections
+	stalling_nop_constant.connectsTo(idex_nop_insert_bus.IN());
+	idex_r.ir.connectsTo(idex_nop_insert_bus.OUT());
 }
 
 void connect_reg_file_to_bus_input(Bus &b) {

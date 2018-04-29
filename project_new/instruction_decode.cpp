@@ -214,3 +214,11 @@ bool is_immediate_alu_instruction(z11::op instruction) {
 bool is_load_instruction(z11::op instruction) {
 	return (instruction == z11::LW);
 }
+
+bool is_store_instruction(z11::op instruction) {
+	return (instruction == z11::SW);
+}
+
+bool is_branch_instruction(z11::op instruction) {
+	return ((instruction == z11::BEQ) || (instruction == z11::BNE));
+}

@@ -30,7 +30,7 @@ class idex_reg {
 		idex_reg(void);
 
 		Clearable valid;
-		StorageObject pc;
+		Counter pc;
 		StorageObject ir;
 		StorageObject a;
 		StorageObject b;
@@ -135,5 +135,9 @@ extern Bus wb_valid_forward;
 //forwarding busses
 extern Bus idex_a_fill;
 extern Bus idex_b_fill;
+
+//stalling hardware
+extern Bus idex_nop_insert_bus;
+extern StorageObject stalling_nop_constant;
 
 #endif // _COMPONENTS_H_
