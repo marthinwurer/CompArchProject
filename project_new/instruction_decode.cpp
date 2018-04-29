@@ -1,6 +1,16 @@
+/**
+ * Source file for "instruction decode" module that translates instruction
+ * register contents into internal instruction representations and provides
+ * information about instruction groups.
+ *
+ * Authors: Coleman Link and Ben Maitland
+ */
+
+//local project includes
 #include "instruction_decode.h"
 
 namespace z11 {
+	//textual representation of instructions
 	const char *mnemonics[] = {
 		"NOP",
 		"J",
@@ -55,6 +65,15 @@ namespace z11 {
 }
 
 
+/**
+ * Helper function for decoding the 'funct' field of "special" instructions to
+ * get their exact instruction type.
+ *
+ * @param ir The instruction register to read the contents of the 'funct'
+ *	field from.
+ * @returns An enum value representing the instruction that was in the
+ *      specified IR.
+ */
 z11::op decode_special_instruction(StorageObject &ir);
 
 
@@ -183,6 +202,10 @@ bool is_register_alu_instruction(z11::op instruction) {
 		case z11::AND:
 		case z11::OR:
 		case z11::XOR:
+		/* shifts count as R-R ALU ops based on tests developed to see
+			when the example solution does and doesn't do
+			forwarding. Also, shifts read 'rt' and write 'rd',
+			like R-R ALU instruction do. */
 		case z11::SLT:
 		case z11::SLTU:
 		case z11::SLL:
@@ -221,4 +244,8 @@ bool is_store_instruction(z11::op instruction) {
 
 bool is_branch_instruction(z11::op instruction) {
 	return ((instruction == z11::BEQ) || (instruction == z11::BNE));
+}
+
+bool is_jump_register_instruction(z11::op instruction) {
+	return ((instruction == z11::JR) || (instruction == z11::JALR));
 }

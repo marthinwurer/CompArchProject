@@ -1,13 +1,283 @@
+/**
+ * Source file for "run_program" module that performs execution of
+ * instructions.
+ *
+ * Authors: Coleman Link and Ben Maitland
+ */
+
+//C++ includes
 #include <iostream>
 #include <iomanip>
 
+//arch library includes
 #include <Clock.h>
 
+//local project includes
 #include "run_program.h"
 #include "components.h"
 #include "instruction_decode.h"
 
+
+
+//global flag determining whether the CPU has been halted or not
 bool halted = false;
+
+
+/***********************************
+ * Misc. functions
+ ***********************************/
+
+	/**
+	 * Perform the initial read of a program's entry point into the
+	 * program counter.
+	 */
+	void bootstrap_program(void);
+
+
+/***********************************
+ * Instruction fetch functions
+ ***********************************/
+
+	/**
+	 * Determine if the instruction currently in the IF/ID register is a
+	 * jump instruction.
+	 *
+	 * @returns True if the IF/ID register currently contains a jump
+	 *	instruction, false otherwise.
+	 */
+	bool id_instruction_is_jump(void);
+
+	/**
+	 * Determine if the instruction currently in the IF/ID register is a
+	 * branch instruction whose branch will be taken.
+	 *
+	 * @returns True if the IF/ID register contains a branch instruction,
+	 *	false otherwise.
+	 */
+	bool id_instruction_is_taken_branch(void);
+
+	/**
+	 * Set up the CPU operations for the first tick (of two) in the
+	 * fetch stage for the current cycle. Just loads the value in PC into
+	 * the instruction memory's MAR.
+	 */
+	void fetch_part1(void);
+
+	/**
+	 * Set up the CPU operations for the second tick (of two) in the
+	 * fetch stage for the current cycle.
+	 * Reads next instruction from instruction memory, determines if we
+	 * are going to branch/jump or just move to the next instruction and
+	 * updates the PC accordingly. Forwards PC contents to IF/ID pipeline
+	 * register.
+	 */
+	void fetch_part2(void);
+
+
+/***********************************
+ * Instruction decode functions
+ ***********************************/
+
+	/**
+	 * Set up operations for sign extending the immediate value used for
+	 * a branch offset.
+	 */
+	void decode_sign_extend_branch_offset(void);
+
+	/**
+	 * Set up the CPU operations for the first tick (of two) in the
+	 * decode stage for the current cycle.
+	 * Performs necessary first-tick operations for instructions that need
+	 * both ticks. This includes branches, jumps, and shifts, that must
+	 * calculate targets, offsets, and extract the contents of the 'sh'
+	 * field, respectively on the first tick.
+	 */
+	void decode_part1(void);
+
+	/**
+	 * Set up the CPU operations for the second tick (of two) in the
+	 * decode stage for the current cycle.
+	 * Loads the contents of 'rs' and 'rt' registers into A and B
+	 * registers, perform sign or zero extension of immediate fields,
+	 * and finish calculating branch and jump destinations, among other
+	 * things.
+	 */
+	void decode_part2(void);
+
+
+/***********************************
+ * Instruction execute functions
+ ***********************************/
+
+	/**
+	 * Determine what general purpose register (if any) is going to be
+	 * written to by the instruction currently in the EX/MEM pipeline
+	 * register. Consideration is limited to those instruction types for
+	 * which forwarding is expected to be implemented
+	 *
+	 * @return The index number of the GPR that will be written, or 0
+	 *	if no GPR will be written by the instruction (note that GPR 0
+	 *	cannot have its value overwritten, so returning 0 for
+	 *	"no write" does not interfere with the resutls.
+	 */
+	long gpr_written_by_mem_stage_instruction(void);
+
+	/**
+	 * Determine what general purpose register (if any) is going to be
+	 * written to by the instruction currently in the MEM/WB pipeline
+	 * register. Consideration is limited to those instruction types for
+	 * which forwarding is expected to be implemented
+	 *
+	 * @return The index number of the GPR that will be written, or 0
+	 *	if no GPR will be written by the instruction (note that GPR 0
+	 *	cannot have its value overwritten, so returning 0 for
+	 *	"no write" does not interfere with the resutls.
+	 */
+	long gpr_written_by_wb_stage_instruction(void);
+
+	/**
+	 * Set up the CPU operations for the first tick (of two) in the
+	 * execute stage for the current cycle.
+	 * The first tick of the execute stage is dedicated entirely to
+	 * forwarding, and pulls in result values from the EX/MEM and MEM/WB
+	 * pipeline registers into the ID/EX pipeline register for use in
+	 * execution, as needed.
+	 */
+	void execute_part1(void);
+
+	/**
+	 * Perform the setup common to the execution of all ALU immediate
+	 * instructions. Sets ALU inputs and outputs (leaving the caller to
+	 * only specify an operation to perform).
+	 */
+	void execute_alu_immediate_common(void);
+
+	/**
+	 * Perform the setup common to the execution of all register-register
+	 * ALU instructions. Sets ALU inputs and outputs (leaving the caller
+	 * to only specify an operation to perform).
+	 */
+	void execute_alu_register_common(void);
+
+	/**
+	 * Perform the setup common to the execution of all shift
+	 * instructions. Sets SLU inputs and outputs (leaving the caller to
+	 * only specify an operation to perform).
+	 */
+	void execute_shift_common(void);
+
+	/**
+	 * Set up the CPU operations for the second tick (of two) in the
+	 * execute stage for the current cycle.
+	 * Forwards data from ID/EX pipeline register to EX/MEM pipeline
+	 * register, performs ALU operations and other calculations.
+	 */
+	void execute_part2(void);
+
+
+/***********************************
+ * Instruction memory functions
+ ***********************************/
+
+	/**
+	 * Set up the CPU operations for the first tick (of two) in the
+	 * memory stage for the current cycle.
+	 * The first tick of the memory stage just loads the data memory
+	 * address into the data memory MAR for load and store instructions.
+	 * No operations are performed for any other instruction types.
+	 */
+	void memory_part1(void);
+
+	/**
+	 * Set up the CPU operations for the second tick (of two) in the
+	 * memory stage for the current cycle.
+	 * The second tick of the memory stage forwards the contents of the
+	 * EX/MEM pipeline register to the MEM/WB pipeline register (if
+	 * necessary) and performs memory reads/writes for load/store
+	 * instructions.
+	 */
+	void memory_part2(void);
+
+
+/***********************************
+ * Instruction writeback functions
+ ***********************************/
+
+	/**
+	 * Set up the CPU operations for the first tick (of two) in the
+	 * writeback stage for the current cycle.
+	 * No operations are performed on the first tick for the writeback
+	 * stage. This function is left as a placeholder.
+	 */
+	void writeback_part1(void);
+
+	/**
+	 * Set up the operations needed to write a result value to the
+	 * specified general purpose register.
+	 *
+	 * @param gpr_num The index in the register file of the GPR to write
+	 *	to.
+	 * @param src The source register for the data to be written to the
+	 *	GPR. Must be connected to 'wb_register_write_bus' input.
+	 */
+	void writeback_to_GPR(int gpr_num, StorageObject &src);
+
+	/**
+	 * Set up the CPU operations for the second tick (of two) in the
+	 * writeback stage for the current cycle.
+	 * Tick 2 of the writeback stage forwards results to the
+	 * post-writeback pipeline register (for instructions tracing), writes
+	 * retuls values into GPRs, and marks the CPU as halted on invalid,
+	 * unimplemented, or halt instructions.
+	 */
+	void writeback_part2(void);
+
+/***********************************
+ * Instruction tracing functions
+ ***********************************/
+
+	/**
+	 * Print any non-zero general purpose registers, up to 4 per line.
+	 * Used for executing break instructions.
+	 */
+	void print_break_information(void);
+
+	/**
+	 * Print out the details of the instruction that most recently
+	 * completed the writeback stage. Also print halt messages if
+	 * necessary.
+	 */
+	void print_execution_record(void);
+
+
+/***********************************
+ * Stalling functions              *
+ ***********************************/
+
+	/**
+	 * Determine if the instruction in the IF/ID pipeline register must be
+	 * stalled (delayed from entering the decode stage).
+	 *
+	 * @returns True if the instruction must be stalled, false otherwise.
+	 */
+	bool must_stall_id_phase(void);
+
+	/**
+	 * Perform the setup necessary to insert a NOP instruction with the
+	 * correct source address into the ID/EX pipeline register. Doing this
+	 * fills the gap created by stalling an instruction from entering the
+	 * decode stage.
+	 */
+	void insert_nop_into_idex_reg(void);
+
+
+
+
+
+
+/***********************************
+ * Function implementations        *
+ ***********************************/
 
 void bootstrap_program(void) {
 	if_r.pc.latchFrom(instruction_mem.READ());
@@ -30,6 +300,9 @@ bool id_instruction_is_taken_branch(void) {
 	switch(decode_instruction(ifid_r.ir)) {
 		case z11::BEQ:
 		case z11::BNE:
+			/* 'cond' bit in ID/EX register will be set after
+				first tick of decode phase for branch
+				instruction */
 			return (idex_r.cond.value());
 	}
 
@@ -37,24 +310,38 @@ bool id_instruction_is_taken_branch(void) {
 }
 
 void fetch_part1(void) {
+	//load address of next instruction into MAR
 	if_instruction_mem_addr_bus.IN().pullFrom(if_r.pc);
 	instruction_mem.MAR().latchFrom(if_instruction_mem_addr_bus.OUT());
 }
 
 void fetch_part2(void) {
+	/* read the next instruction from memory into the IR. This may result
+		in an issue in edge cases where a HALT instruction has already
+		been read from the highest allowed address in memory, at which
+		point attempting to read further instructions while the HALT
+		progressed to the writeback stage would result in an
+		ArchLibError for reading out of bounds from instruction
+		memory. We choose to acknowledge this case without handling
+		it, as it is unlikely to ever occur. */
 	instruction_mem.read();
 	ifid_r.ir.latchFrom(instruction_mem.READ());
 
+	/* instruction in decode phase is jump, new PC value is its
+		specified destination */
 	if(id_instruction_is_jump()) {
 		if_r.pc.latchFrom(if_branch_bus.OUT());
 	}
+	/* instruction in decode phase is branch, new PC value is its
+		specified destination */
 	else if(id_instruction_is_taken_branch()) {
 		if_r.pc.latchFrom(id_imm_alu.OUT());
 	}
-	else { //not a branch or jump
+	else { //not a branch or jump, increment PC
 		if_r.pc.perform(Counter::incr4);
 	}
 
+	//forward PC value
 	if_pc_forward.IN().pullFrom(if_r.pc);
 	ifid_r.pc.latchFrom(if_pc_forward.OUT());
 	ifid_r.new_pc.latchFrom(if_pc_forward.OUT());
@@ -66,49 +353,57 @@ void decode_sign_extend_branch_offset(void) {
 	id_imm_alu.OP1().pullFrom(ifid_r.ir);
 	id_imm_alu.OP2().pullFrom(id_imm_sign_extend_mask);
 	id_imm_alu.perform(BusALU::op_extendSign);
-	id_shift_temp_reg.latchFrom(id_imm_alu.OUT());
+	id_temp_reg.latchFrom(id_imm_alu.OUT());
 }
 
 void decode_part1(void) {
+	//only continue if a valid instruction is waiting to be decoded
 	if(!ifid_r.valid.value()) {
 		return;
 	}
 
-//use id_shift_temp_reg for computing jump offsets as well
 
 	switch(decode_instruction(ifid_r.ir)) {
+		//non-variable shift operations
 		case z11::SLL:
 		case z11::SRL:
 		case z11::SRA:
+			//shift 'sh' field of instruction over to the right
 			id_imm_alu.OP1().pullFrom(ifid_r.ir);
 			id_imm_alu.OP2().pullFrom(id_sh_field_shift_amount);
 			id_imm_alu.perform(BusALU::op_rshift);
-			id_shift_temp_reg.latchFrom(id_imm_alu.OUT());
+			id_temp_reg.latchFrom(id_imm_alu.OUT());
 			break;
 
+		//variable shift and jump register operations
 		case z11::SLLV:
 		case z11::SRLV:
 		case z11::SRAV:
 		case z11::JR:
 		case z11::JALR:
 			//load 'rs' into temp register
-			id_shift_temp_reg_load_bus.IN().pullFrom(
+			id_temp_reg_load_bus.IN().pullFrom(
 				GPR(RS(ifid_r.ir)));
-			id_shift_temp_reg.latchFrom(
-				id_shift_temp_reg_load_bus.OUT());
+			id_temp_reg.latchFrom(
+				id_temp_reg_load_bus.OUT());
 			break;
 
+		//jump instructions
 		case z11::J:
 		case z11::JAL:
+			//load jump target into temp register
 			id_imm_alu.OP1().pullFrom(ifid_r.ir);
 			id_imm_alu.OP2().pullFrom(id_jump_target_mask);
 			id_imm_alu.perform(BusALU::op_and);
-			id_shift_temp_reg.latchFrom(id_imm_alu.OUT());
+			id_temp_reg.latchFrom(id_imm_alu.OUT());
 			break;
 
 		case z11::BEQ:
+			//sign extend the branch offset and set 'cond' bit
 			decode_sign_extend_branch_offset();
-			if(GPR(RS(ifid_r.ir)).value() == GPR(RT(ifid_r.ir)).value()) {
+			if(GPR(RS(ifid_r.ir)).value() ==
+				GPR(RT(ifid_r.ir)).value()) {
+
 				idex_r.cond.set();
 			}
 			else {idex_r.cond.clear();}
@@ -116,8 +411,11 @@ void decode_part1(void) {
 			break;
 
 		case z11::BNE:
+			//sign extend the branch offset and set 'cond' bit
 			decode_sign_extend_branch_offset();
-			if(GPR(RS(ifid_r.ir)).value() != GPR(RT(ifid_r.ir)).value()) {
+			if(GPR(RS(ifid_r.ir)).value() !=
+				GPR(RT(ifid_r.ir)).value()) {
+
 				idex_r.cond.set();
 			}
 			else {idex_r.cond.clear();}
@@ -127,9 +425,11 @@ void decode_part1(void) {
 }
 
 void decode_part2(void) {
+	//forward valid bit
 	id_valid_forward.IN().pullFrom(ifid_r.valid);
 	idex_r.valid.latchFrom(id_valid_forward.OUT());
 
+	//only continue if a valid instruction is waiting to be decoded
 	if(!ifid_r.valid.value()) {
 		return;
 	}
@@ -148,6 +448,7 @@ void decode_part2(void) {
 	id_b_load_bus.IN().pullFrom(GPR(RT(ifid_r.ir)));
 	idex_r.b.latchFrom(id_b_load_bus.OUT());
 
+	//forward IR contents
 	id_ir_forward.IN().pullFrom(ifid_r.ir);
 	idex_r.ir.latchFrom(id_ir_forward.OUT());
 
@@ -175,29 +476,32 @@ void decode_part2(void) {
 			idex_r.imm.latchFrom(id_imm_alu.OUT());
 			break;
 
+		//masking out 5-bit shift amount
 		case z11::SLL:
 		case z11::SRL:
 		case z11::SRA:
 		case z11::SLLV:
 		case z11::SRLV:
 		case z11::SRAV:
-			id_imm_alu.OP1().pullFrom(id_shift_temp_reg);
+			id_imm_alu.OP1().pullFrom(id_temp_reg);
 			id_imm_alu.OP2().pullFrom(id_shift_field_mask);
 			id_imm_alu.perform(BusALU::op_and);
 			idex_r.imm.latchFrom(id_imm_alu.OUT());
 			break;
 
+		//feed jump destination addr into bus
 		case z11::J:
 		case z11::JAL:
 		case z11::JR:
 		case z11::JALR:
-			if_branch_bus.IN().pullFrom(id_shift_temp_reg);
+			if_branch_bus.IN().pullFrom(id_temp_reg);
 			break;
 
+		//add branch offset to PC and send result to PC
 		case z11::BEQ:
 		case z11::BNE:
 			if(idex_r.cond.value()) {
-				id_imm_alu.OP1().pullFrom(id_shift_temp_reg);
+				id_imm_alu.OP1().pullFrom(id_temp_reg);
 				id_imm_alu.OP2().pullFrom(ifid_r.new_pc);
 				id_imm_alu.perform(BusALU::op_add);
 			}
@@ -219,11 +523,11 @@ void decode_part2(void) {
 			break;
 	}
 
+	//forward PC
 	id_pc_forward.IN().pullFrom(ifid_r.pc);
 	idex_r.pc.latchFrom(id_pc_forward.OUT());
 }
 
-//return 0 on no write, as we should never successfully write register 0
 long gpr_written_by_mem_stage_instruction(void) {
 	z11::op instruction = decode_instruction(exmem_r.ir);
 	if(is_register_alu_instruction(instruction)) {
@@ -252,51 +556,51 @@ long gpr_written_by_wb_stage_instruction(void) {
 }
 
 void execute_part1(void) {
+	//only continue if a valid instruction is waiting to be executed
 	if(!idex_r.valid.value()) {
 		return;
 	}
 
-		//vvvvvvvvvvvvvvvvv Have this function only return results if the operation in that stage is of the right 'type'
-	//get GPR written to by	mem stage instruction (if any) --- if something is comming from mem, it will be in 'c' register
-		//this determination will involve a case statement that considers R-R ALU, ALU imm, and loads
-	//get GPR written to by wb stage instruction (if any) --- if something is comming from wb, it will always be in 'c' register
-		//this determination will involve a case statement that considers R-R ALU, ALU imm, and loads
-
-	//if we use rs (ie: we are R-R ALU, ALU imm, load, store, or branch)
-		//if rs is written by mem stage instruction:
-			//forward from exmem.c to A
-		//else, if rs is written by wb stage instruction:
-			//forward from memwb.c to A
-
-	//if we use rt (ie: we are R-R ALU)
-		//if rt is written by mem stage instruction:
-			//forward from exmem.c to B
-		//else, if rt is written by wb stage instruction:
-			//forward from memwb.c to B
-
+	//get instruction we are about to execute
 	z11::op instruction = decode_instruction(idex_r.ir);
 
+	//get GPR written to by mem stage instruction (if any)
 	long mem_stage_gpr = ((exmem_r.valid()) ?
 		gpr_written_by_mem_stage_instruction() : 0);
+	//get GPR written to by wb stage instruction (if any)
 	long wb_stage_gpr = ((memwb_r.valid()) ?
 		gpr_written_by_wb_stage_instruction() : 0);
 
-	//we assume forwarding is always needed for 'rs'
+	/* we assume forwarding is always needed for 'rs' if it conflicts with
+		a register being updated by an earlier instruction. This
+		assumption works because all of the instructions either need
+		forwarding of rs, or don't use the results of 'rs' at all
+		(meaning it doesn't change anything to forward anyway) */
+
+	//if 'rs' written by instrucion in mem stage
 	if((mem_stage_gpr) && (mem_stage_gpr == RS(idex_r.ir))) {
+		//forward from mem stage
 		idex_a_fill.IN().pullFrom(exmem_r.c);
 		idex_r.a.latchFrom(idex_a_fill.OUT());
 	}
+	//if 'rs' written by instrucion in wb stage
 	else if((wb_stage_gpr) && (wb_stage_gpr == RS(idex_r.ir))) {
+		//forward from wb stage
 		idex_a_fill.IN().pullFrom(memwb_r.c);
 		idex_r.a.latchFrom(idex_a_fill.OUT());
 	}
 
+	//if we use 'rt' (ie: we are R-R ALU)
 	if(is_register_alu_instruction(instruction)) {
+		//if 'rt' written by instrucion in mem stage
 		if((mem_stage_gpr) && (mem_stage_gpr == RT(idex_r.ir))) {
+			//forward from mem stage
 			idex_b_fill.IN().pullFrom(exmem_r.c);
 			idex_r.b.latchFrom(idex_b_fill.OUT());
 		}
+		//if 'rt' written by instrucion in wb stage
 		else if((wb_stage_gpr) && (wb_stage_gpr == RT(idex_r.ir))) {
+			//forward from wb stage
 			idex_b_fill.IN().pullFrom(memwb_r.c);
 			idex_r.b.latchFrom(idex_b_fill.OUT());
 		}
@@ -322,16 +626,20 @@ void execute_shift_common(void) {
 }
 
 void execute_part2(void) {
+	//forward valid bit
 	ex_valid_forward.IN().pullFrom(idex_r.valid);
 	exmem_r.valid.latchFrom(ex_valid_forward.OUT());
 
+	//only continue if a valid instruction is waiting to be executed
 	if(!idex_r.valid.value()) {
 		return;
 	}
 
+	//forward PC
 	ex_pc_forward.IN().pullFrom(idex_r.pc);
 	exmem_r.pc.latchFrom(ex_pc_forward.OUT());
 
+	//forward IR
 	ex_ir_forward.IN().pullFrom(idex_r.ir);
 	exmem_r.ir.latchFrom(ex_ir_forward.OUT());
 
@@ -440,8 +748,10 @@ void execute_part2(void) {
 			ex_alu.perform(BusALU::op_rashift);
 			break;
 
+		//jump and link instructions
 		case z11::JAL:
 		case z11::JALR:
+			//compute addr to saved into GPR 31
 			ex_alu.OP1().pullFrom(idex_r.pc);
 			ex_alu.OP2().pullFrom(ex_jump_link_return_offset);
 			exmem_r.c.latchFrom(ex_alu.OUT());
@@ -463,6 +773,7 @@ void execute_part2(void) {
 }
 
 void memory_part1(void) {
+	//only continue if a valid instruction is waiting to enter mem stage
 	if(!exmem_r.valid.value()) {
 		return;
 	}
@@ -474,53 +785,24 @@ void memory_part1(void) {
 			mem_data_mem_addr_bus.IN().pullFrom(exmem_r.c);
 			data_mem.MAR().latchFrom(mem_data_mem_addr_bus.OUT());
 			break;
-
-		//do nothing cases
-		case z11::ADDI:
-		case z11::SLTI:
-		case z11::ANDI:
-		case z11::ORI:
-		case z11::XORI:
-		case z11::LUI:
-		case z11::ADD:
-		case z11::SUB:
-		case z11::SLT:
-		case z11::SLTU:
-		case z11::AND:
-		case z11::OR:
-		case z11::XOR:
-		case z11::NOP:
-		case z11::SLL:
-		case z11::SRL:
-		case z11::SRA:
-		case z11::SLLV:
-		case z11::SRLV:
-		case z11::SRAV:
-		case z11::HALT:
-		case z11::BREAK:
-		case z11::J:
-		case z11::JAL:
-		case z11::JR:
-		case z11::JALR:
-		case z11::BEQ:
-		case z11::BNE:
-		case z11::UNKNOWN: //invalid instructions
-		default: //valid but unimplemented instructions
-			break;
 	}
 }
 
 void memory_part2(void) {
+	//forward valid bit
 	mem_valid_forward.IN().pullFrom(exmem_r.valid);
 	memwb_r.valid.latchFrom(mem_valid_forward.OUT());
 
+	//only continue if a valid instruction is waiting to enter mem stage
 	if(!exmem_r.valid.value()) {
 		return;
 	}
 
+	//forward PC
 	mem_pc_forward.IN().pullFrom(exmem_r.pc);
 	memwb_r.pc.latchFrom(mem_pc_forward.OUT());
 
+	//forward IR
 	mem_ir_forward.IN().pullFrom(exmem_r.ir);
 	memwb_r.ir.latchFrom(mem_ir_forward.OUT());
 
@@ -548,17 +830,21 @@ void memory_part2(void) {
 		case z11::SRAV:
 		case z11::JAL:
 		case z11::JALR:
+			//just forward result through
 			mem_c_forward.IN().pullFrom(exmem_r.c);
 			memwb_r.c.latchFrom(mem_c_forward.OUT());
 			break;
 
+		//load instruction
 		case z11::LW:
+			//read from memory
 			data_mem.read();
-//			memwb_r.memory_data.latchFrom(data_mem.READ());
 			memwb_r.c.latchFrom(data_mem.READ());
 			break;
 
+		//store instruction
 		case z11::SW:
+			//write to memory
 			data_mem.write();
 			data_mem.WRITE().pullFrom(exmem_r.b);
 			break;
@@ -577,10 +863,10 @@ void memory_part2(void) {
 	}
 }
 
-void writeback_part1(void) {
-}
+void writeback_part1(void) {}
 
 void writeback_to_GPR(int gpr_num, StorageObject &src) {
+	//r0 can't be overwritten
 	if(gpr_num == 0) {return;}
 
 	wb_register_write_bus.IN().pullFrom(src);
@@ -588,16 +874,20 @@ void writeback_to_GPR(int gpr_num, StorageObject &src) {
 }
 
 void writeback_part2(void) {
+	//forward valid bit
 	wb_valid_forward.IN().pullFrom(memwb_r.valid);
 	post_wb_r.valid.latchFrom(wb_valid_forward.OUT());
 
+	//only continue if a valid instruction is waiting to enter wb stage
 	if(!memwb_r.valid.value()) {
 		return;
 	}
 
+	//forward PC
 	wb_pc_forward.IN().pullFrom(memwb_r.pc);
 	post_wb_r.pc.latchFrom(wb_pc_forward.OUT());
 
+	//forward IR
 	wb_ir_forward.IN().pullFrom(memwb_r.ir);
 	post_wb_r.ir.latchFrom(wb_ir_forward.OUT());
 
@@ -609,9 +899,8 @@ void writeback_part2(void) {
 		case z11::ORI:
 		case z11::XORI:
 		case z11::LUI:
+			//write result to 'rt'
 			writeback_to_GPR(RT(memwb_r.ir), memwb_r.c);
-//			wb_register_write_bus.IN().pullFrom(memwb_r.c);
-//			GPR(memwb_r.ir(20, 16)).latchFrom(wb_register_write_bus.OUT());
 			break;
 
 		//register-register ALU instructions
@@ -629,22 +918,24 @@ void writeback_part2(void) {
 		case z11::SRLV:
 		case z11::SRAV:
 		case z11::JALR:
-			//place result in 'rd'
+			//write result to 'rd'
 			writeback_to_GPR(RD(memwb_r.ir), memwb_r.c);
 			break;
 
 		//load instructions
 		case z11::LW:
-//			writeback_to_GPR(memwb_r.ir(20, 16), memwb_r.memory_data);
+			//write result to 'rt'
 			writeback_to_GPR(RT(memwb_r.ir), memwb_r.c);
 			break;
 
+		//instructions that lead to halting
 		case z11::HALT:
 		case z11::UNKNOWN: //invalid instructions
 		default: //valid but unimplemented instructions
 			halted = true;
 			break;
 
+		//JAL writes return addr to r31
 		case z11::JAL:
 			writeback_to_GPR(31, memwb_r.c);
 			break;
@@ -680,18 +971,23 @@ void print_break_information(void) {
 }
 
 void print_execution_record(void) {
+	/* only continue if the instruction that just finished the writeback
+		stage was a valid one */
 	if(!post_wb_r.valid.value()) {
 		return;
 	}
 
+	//print address of instruction
 	std::cout << std::hex << std::setw(8) << std::setfill('0') <<
 		post_wb_r.pc.value() << ":  ";
 
+	//print hex opcode value
 	std::cout << std::hex << std::setw(2) << std::setfill('0') <<
 		post_wb_r.ir(31, 26);
 
 	z11::op operation = decode_instruction(post_wb_r.ir);
 
+	//print 'funct' value if it was a special instruction
 	if(is_special_instruction(post_wb_r.ir)) {
 		std::cout << " " << std::hex << std::setw(2) <<
 			std::setfill('0') << post_wb_r.ir(5, 0);
@@ -700,12 +996,14 @@ void print_execution_record(void) {
 		std::cout << "   ";
 	}
 
+	//print mnemonic
 	std::cout << " " << std::left << std::setw(7) << std::setfill(' ') <<
 		z11::mnemonics[operation] << std::right;
 
 
+	//print any overwritten registers and print info for breaks
 	switch(operation) {
-		//immediate ALU instructions
+		//immediate ALU instructions write 'rt'
 		case z11::ADDI:
 		case z11::SLTI:
 		case z11::ANDI:
@@ -717,7 +1015,7 @@ void print_execution_record(void) {
 				GPR(RT(post_wb_r.ir));
 			break;
 
-		//register-register ALU instructions
+		//register-register ALU instructions write 'rd'
 		case z11::ADD:
 		case z11::SUB:
 		case z11::SLT:
@@ -740,6 +1038,7 @@ void print_execution_record(void) {
 			print_break_information();
 			break;
 
+		//JAL instructions write r31
 		case z11::JAL:
 			std::cout << " " << std::hex << GPR(31);
 			break;
@@ -759,6 +1058,7 @@ void print_execution_record(void) {
 
 	std::cout << std::endl;
 
+	//print halt message (if necessary)
 	if(halted) {
 		std::cout << "Machine Halted - ";
 		switch(operation) {
@@ -779,17 +1079,21 @@ void print_execution_record(void) {
 
 bool must_stall_id_phase(void) {
 	//if load instruction in ID/EX
-	if(idex_r.valid.value() && is_load_instruction(decode_instruction(idex_r.ir))) {
-		//if IF/ID instruction is (R-R ALU, ALU imm, load, store, branch)
-		//TODO: does this include JAL and JALR?
+	if(idex_r.valid.value() &&
+		is_load_instruction(decode_instruction(idex_r.ir))) {
+
+		/* if IF/ID instruction is (R-R ALU, ALU imm, load, store,
+			branch, JR, JALR) */
 		z11::op ifid_ins = decode_instruction(ifid_r.ir);
 		if(is_register_alu_instruction(ifid_ins) ||
 			is_immediate_alu_instruction(ifid_ins) ||
 			is_load_instruction(ifid_ins) ||
 			is_store_instruction(ifid_ins) ||
-			is_branch_instruction(ifid_ins)) {
+			is_branch_instruction(ifid_ins) ||
+			is_jump_register_instruction(ifid_ins)) {
 
-			//check the load's 'rt' against the other instruction's 'rs'
+			/* check the load's 'rt' against the other
+				instruction's 'rs' */
 			if(RT(idex_r.ir) == RS(ifid_r.ir)) {
 				//if the same, stall
 				return true;
@@ -798,7 +1102,8 @@ bool must_stall_id_phase(void) {
 
 		//if IF/ID instruction is R-R ALU:
 		if(is_register_alu_instruction(ifid_ins)) {
-			//check the load's 'rt' against the other instruction's 'rt'
+			/* check the load's 'rt' against the other
+				instruction's 'rt' */
 			if(RT(idex_r.ir) == RT(ifid_r.ir)) {
 				//if the same, stall
 				return true;
@@ -807,15 +1112,20 @@ bool must_stall_id_phase(void) {
 	}
 
 	//if load instruction in EX/MEM
-	if(exmem_r.valid.value() && is_load_instruction(decode_instruction(exmem_r.ir))) {
+	if(exmem_r.valid.value() &&
+		is_load_instruction(decode_instruction(exmem_r.ir))) {
+
 		//if IF/ID instruction is branch
 		if(is_branch_instruction(decode_instruction(ifid_r.ir))) {
-			//check the load's 'rt' against the other instructions 'rs'
+			/* check the load's 'rt' against the other
+				instructions 'rs' */
 			if(RT(exmem_r.ir) == RS(ifid_r.ir)) {
 				//if the same, stall
 				return true;
 			}
-			//check the load's 'rt' against the other instructions 'rt'
+
+			/* check the load's 'rt' against the other
+				instructions 'rt' */
 			if(RT(exmem_r.ir) == RT(ifid_r.ir)) {
 				//if the same, stall
 				return true;
@@ -826,9 +1136,9 @@ bool must_stall_id_phase(void) {
 	return false;
 }
 
-//implement stalling in a way that matches the example soluion. would have
-//	preffered to use valid registers, but this will allow us to try for 0-diffs
 void insert_nop_into_idex_reg(void) {
+	/* insert a NOP into the ID/EX register and give it the correct
+		address */
 	idex_r.pc.perform(Counter::incr4);
 
 	idex_nop_insert_bus.IN().pullFrom(stalling_nop_constant);
@@ -836,57 +1146,45 @@ void insert_nop_into_idex_reg(void) {
 }
 
 void run_program(void) {
+	//initial load of entry point into PC
 	bootstrap_program();
-	int ctr = 0;
 
 	while(!halted) {
-
-//		s = (stalling ID stage necessary)
+		//determine if we need to stall this cycle
 		bool stall_id_phase = must_stall_id_phase();
 
-		//if (!s):
-		if(!stall_id_phase) {
-			fetch_part1();
-			decode_part1();
-		}
+		/* first clock tick of cycle */
 
-		execute_part1();
-		memory_part1();
-		writeback_part1();
-		Clock::tick();
+			//stall fetch and decode phases if necessary
+			if(!stall_id_phase) {
+				fetch_part1();
+				decode_part1();
+			}
 
-		//if (!s):
-		if(!stall_id_phase) {
-			fetch_part2();
-			decode_part2();
-		}
-		else {
-			//the example solution works by inserting a NOP, rather than using valid bits
-			//idex_r.valid.clear();
+			execute_part1();
+			memory_part1();
+			writeback_part1();
+			Clock::tick();
 
-			insert_nop_into_idex_reg();
-		}
-		execute_part2();
-		memory_part2();
-		writeback_part2();
-		Clock::tick();
+		/* second clock tick of cycle */
+
+			//stall fetch and decode phases if necessary
+			if(!stall_id_phase) {
+				fetch_part2();
+				decode_part2();
+			}
+			else {
+				//example solution does stall by inserting NOP
+				insert_nop_into_idex_reg();
+			}
+
+			execute_part2();
+			memory_part2();
+			writeback_part2();
+			Clock::tick();
 
 
+		//print instruction trace
 		print_execution_record();
-
-/*
-		std::cout << "Got instruction: " << z11::mnemonics[decode_instruction(ifid_r.ir)] << std::endl;
-
-		std::cout << ctr << " contents of registers:" << std::hex << std::endl;
-		for(int i = 0; i < 32; ++i) {
-			std::cout << "\t" << i << "[" << GPR(i).value() << "]" << std::endl;
-		}
-		std::cout << "\tIDEX A: " << idex_r.a << std::endl;
-		std::cout << "\tIDEX imm: " << idex_r.imm << std::endl;
-		std::cout << "\tEXMEM c: " << exmem_r.c << std::endl;
-		std::cout << "\tMEMWB c: " << memwb_r.c << std::endl;
-		ctr++;
-*/
-//		if(ctr > 30) {halted = true;}
 	}
 }
