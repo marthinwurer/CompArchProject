@@ -104,7 +104,7 @@ void decode_part1(void) {
 		case z11::JALR:
 			//load 'rs' into temp register
 			id_shift_temp_reg_load_bus.IN().pullFrom(
-				GPR(ifid_r.ir(25, 21)));
+				GPR(RS(ifid_r.ir)));
 			id_shift_temp_reg.latchFrom(
 				id_shift_temp_reg_load_bus.OUT());
 			break;
@@ -119,7 +119,7 @@ void decode_part1(void) {
 
 		case z11::BEQ:
 			decode_sign_extend_branch_offset();
-			if(GPR(ifid_r.ir(25, 21)).value() == GPR(ifid_r.ir(20, 16)).value()) {
+			if(GPR(RS(ifid_r.ir)).value() == GPR(RT(ifid_r.ir)).value()) {
 				idex_r.cond.set();
 			}
 			else {idex_r.cond.clear();}
@@ -128,7 +128,7 @@ void decode_part1(void) {
 
 		case z11::BNE:
 			decode_sign_extend_branch_offset();
-			if(GPR(ifid_r.ir(25, 21)).value() != GPR(ifid_r.ir(20, 16)).value()) {
+			if(GPR(RS(ifid_r.ir)).value() != GPR(RT(ifid_r.ir)).value()) {
 				idex_r.cond.set();
 			}
 			else {idex_r.cond.clear();}
@@ -152,11 +152,11 @@ void decode_part2(void) {
 		loaded later */
 
 	//load A with contents of register 'rs'
-	id_a_load_bus.IN().pullFrom(GPR(ifid_r.ir(25, 21)));
+	id_a_load_bus.IN().pullFrom(GPR(RS(ifid_r.ir)));
 	idex_r.a.latchFrom(id_a_load_bus.OUT());
 
 	//load B with contents of register 'rt'
-	id_b_load_bus.IN().pullFrom(GPR(ifid_r.ir(20, 16)));
+	id_b_load_bus.IN().pullFrom(GPR(RT(ifid_r.ir)));
 	idex_r.b.latchFrom(id_b_load_bus.OUT());
 
 	id_ir_forward.IN().pullFrom(ifid_r.ir);
@@ -234,7 +234,78 @@ void decode_part2(void) {
 	idex_r.pc.latchFrom(id_pc_forward.OUT());
 }
 
+//return 0 on no write, as we should never successfully write register 0
+long gpr_written_by_mem_stage_instruction(void) {
+	z11::op instruction = decode_instruction(exmem_r.ir);
+	if(is_register_alu_instruction(instruction)) {
+		return RD(exmem_r.ir);
+	}
+	else if(is_immediate_alu_instruction(instruction)) {
+		return RT(exmem_r.ir);
+	}
+
+	return 0;
+}
+
+long gpr_written_by_wb_stage_instruction(void) {
+	z11::op instruction = decode_instruction(memwb_r.ir);
+	if(is_register_alu_instruction(instruction)) {
+		return RD(memwb_r.ir);
+	}
+	else if(is_immediate_alu_instruction(instruction)) {
+		return RT(memwb_r.ir);
+	}
+	else if(is_load_instruction(instruction)) {
+		return RT(memwb_r.ir);
+	}
+
+	return 0;
+}
+
 void execute_part1(void) {
+		//vvvvvvvvvvvvvvvvv Have this function only return results if the operation in that stage is of the right 'type'
+	//get GPR written to by	mem stage instruction (if any) --- if something is comming from mem, it will be in 'c' register
+		//this determination will involve a case statement that considers R-R ALU, ALU imm, and loads
+	//get GPR written to by wb stage instruction (if any) --- if something is comming from wb, it will always be in 'c' register
+		//this determination will involve a case statement that considers R-R ALU, ALU imm, and loads
+
+	//if we use rs (ie: we are R-R ALU, ALU imm, load, store, or branch)
+		//if rs is written by mem stage instruction:
+			//forward from exmem.c to A
+		//else, if rs is written by wb stage instruction:
+			//forward from memwb.c to A
+
+	//if we use rt (ie: we are R-R ALU)
+		//if rt is written by mem stage instruction:
+			//forward from exmem.c to B
+		//else, if rt is written by wb stage instruction:
+			//forward from memwb.c to B
+
+	z11::op instruction = decode_instruction(idex_r.ir);
+
+	long mem_stage_gpr = gpr_written_by_mem_stage_instruction();
+	long wb_stage_gpr = gpr_written_by_wb_stage_instruction();
+
+	//we assume forwarding is always needed for 'rs'
+	if((mem_stage_gpr) && (mem_stage_gpr == RS(idex_r.ir))) {
+		idex_a_fill.IN().pullFrom(exmem_r.c);
+		idex_r.a.latchFrom(idex_a_fill.OUT());
+	}
+	else if((wb_stage_gpr) && (wb_stage_gpr == RS(idex_r.ir))) {
+		idex_a_fill.IN().pullFrom(memwb_r.c);
+		idex_r.a.latchFrom(idex_a_fill.OUT());
+	}
+
+	if(is_register_alu_instruction(instruction)) {
+		if((mem_stage_gpr) && (mem_stage_gpr == RT(idex_r.ir))) {
+			idex_b_fill.IN().pullFrom(exmem_r.c);
+			idex_r.b.latchFrom(idex_b_fill.OUT());
+		}
+		else if((wb_stage_gpr) && (wb_stage_gpr == RT(idex_r.ir))) {
+			idex_b_fill.IN().pullFrom(memwb_r.c);
+			idex_r.b.latchFrom(idex_b_fill.OUT());
+		}
+	}
 }
 
 void execute_alu_immediate_common(void) {
@@ -326,7 +397,7 @@ void execute_part2(void) {
 			ex_alu.perform(BusALU::op_lshift);
 			break;
 		case z11::SLTI:
-			if(((int32_t)GPR(idex_r.ir(25, 21)).value()) <
+			if(((int32_t)GPR(RS(idex_r.ir)).value()) <
 				((int32_t)idex_r.imm.value())) {
 
 				ex_alu.perform(BusALU::op_one);
@@ -337,8 +408,8 @@ void execute_part2(void) {
 			exmem_r.c.latchFrom(ex_alu.OUT());
 			break;
 		case z11::SLT:
-			if(((int32_t)GPR(idex_r.ir(25, 21)).value()) <
-				((int32_t)GPR(idex_r.ir(20, 16)).value())) {
+			if(((int32_t)GPR(RS(idex_r.ir)).value()) <
+				((int32_t)GPR(RT(idex_r.ir)).value())) {
 
 				ex_alu.perform(BusALU::op_one);
 			}
@@ -348,8 +419,8 @@ void execute_part2(void) {
 			exmem_r.c.latchFrom(ex_alu.OUT());
 			break;
 		case z11::SLTU:
-			if(((uint32_t)GPR(idex_r.ir(25, 21)).value()) <
-				((uint32_t)GPR(idex_r.ir(20, 16)).value())) {
+			if(((uint32_t)GPR(RS(idex_r.ir)).value()) <
+				((uint32_t)GPR(RT(idex_r.ir)).value())) {
 
 				ex_alu.perform(BusALU::op_one);
 			}
@@ -488,7 +559,8 @@ void memory_part2(void) {
 
 		case z11::LW:
 			data_mem.read();
-			memwb_r.memory_data.latchFrom(data_mem.READ());
+//			memwb_r.memory_data.latchFrom(data_mem.READ());
+			memwb_r.c.latchFrom(data_mem.READ());
 			break;
 
 		case z11::SW:
@@ -542,7 +614,7 @@ void writeback_part2(void) {
 		case z11::ORI:
 		case z11::XORI:
 		case z11::LUI:
-			writeback_to_GPR(memwb_r.ir(20, 16), memwb_r.c);
+			writeback_to_GPR(RT(memwb_r.ir), memwb_r.c);
 //			wb_register_write_bus.IN().pullFrom(memwb_r.c);
 //			GPR(memwb_r.ir(20, 16)).latchFrom(wb_register_write_bus.OUT());
 			break;
@@ -563,16 +635,13 @@ void writeback_part2(void) {
 		case z11::SRAV:
 		case z11::JALR:
 			//place result in 'rd'
-			writeback_to_GPR(memwb_r.ir(15, 11), memwb_r.c);
-//			wb_register_write_bus.IN().pullFrom(memwb_r.c);
-//			GPR(memwb_r.ir(15, 11)).latchFrom(wb_register_write_bus.OUT());
+			writeback_to_GPR(RD(memwb_r.ir), memwb_r.c);
 			break;
 
 		//load instructions
 		case z11::LW:
-			writeback_to_GPR(memwb_r.ir(20, 16), memwb_r.memory_data);
-//			wb_register_write_bus.IN().pullFrom(memwb_r.memory_data);
-//			GPR(memwb_r.ir(20, 16)).latchFrom(wb_register_write_bus.OUT());
+//			writeback_to_GPR(memwb_r.ir(20, 16), memwb_r.memory_data);
+			writeback_to_GPR(RT(memwb_r.ir), memwb_r.c);
 			break;
 
 		case z11::HALT:
@@ -650,7 +719,7 @@ void print_execution_record(void) {
 		case z11::LUI:
 		case z11::LW:
 			std::cout << " " << std::hex <<
-				GPR(post_wb_r.ir(20, 16));
+				GPR(RT(post_wb_r.ir));
 			break;
 
 		//register-register ALU instructions
@@ -669,7 +738,7 @@ void print_execution_record(void) {
 		case z11::SRAV:
 		case z11::JALR:
 			std::cout << " " << std::hex <<
-				GPR(post_wb_r.ir(15, 11));
+				GPR(RD(post_wb_r.ir));
 			break;
 
 		case z11::BREAK:

@@ -132,4 +132,8 @@ extern Bus wb_pc_forward;
 extern Bus wb_ir_forward;
 extern Bus wb_valid_forward;
 
+//forwarding busses
+extern Bus idex_a_fill;
+extern Bus idex_b_fill;
+
 #endif // _COMPONENTS_H_

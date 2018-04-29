@@ -62,8 +62,18 @@ namespace z11 {
 	extern const char *mnemonics[];
 }
 
+#define RS(ir) (ir(25, 21))
+#define RT(ir) (ir(20, 16))
+#define RD(ir) (ir(15, 11))
+
 z11::op decode_instruction(StorageObject &ir);
 
 bool is_special_instruction(StorageObject &ir);
+
+bool is_register_alu_instruction(z11::op instruction);
+
+bool is_immediate_alu_instruction(z11::op instruction);
+
+bool is_load_instruction(z11::op instruction);
 
 #endif // _INSTRUCTION_DECODE_H_

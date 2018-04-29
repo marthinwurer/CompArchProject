@@ -174,3 +174,43 @@ z11::op decode_special_instruction(StorageObject &ir) {
 bool is_special_instruction(StorageObject &ir) {
 	return (ir(31, 26) == 0);
 }
+
+
+bool is_register_alu_instruction(z11::op instruction) {
+	switch(instruction) {
+		case z11::ADD:
+		case z11::SUB:
+		case z11::AND:
+		case z11::OR:
+		case z11::XOR:
+		case z11::SLT:
+		case z11::SLTU:
+		case z11::SLL:
+		case z11::SRL:
+		case z11::SRA:
+		case z11::SLLV:
+		case z11::SRLV:
+		case z11::SRAV:
+			return true;
+	}
+
+	return false;
+}
+
+bool is_immediate_alu_instruction(z11::op instruction) {
+	switch(instruction) {
+		case z11::ADDI:
+		case z11::SLTI:
+		case z11::ANDI:
+		case z11::ORI:
+		case z11::XORI:
+		case z11::LUI:
+			return true;
+	}
+
+	return false;
+}
+
+bool is_load_instruction(z11::op instruction) {
+	return (instruction == z11::LW);
+}

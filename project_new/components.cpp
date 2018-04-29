@@ -170,3 +170,8 @@ Bus wb_register_write_bus("wb_register_write_bus", WORD_WIDTH);
 Bus wb_pc_forward("wb_pc_forward", ADDR_WIDTH);
 Bus wb_ir_forward("wb_ir_forward", WORD_WIDTH);
 Bus wb_valid_forward("wb_valid_forward", 1);
+
+
+//forwarding busses
+Bus idex_a_fill("idex_a_fill", WORD_WIDTH);
+Bus idex_b_fill("idex_b_fill", WORD_WIDTH);

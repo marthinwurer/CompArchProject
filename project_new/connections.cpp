@@ -93,7 +93,8 @@ void connect_components(void) {
 
 	exmem_r.c.connectsTo(mem_data_mem_addr_bus.IN());
 	data_mem.MAR().connectsTo(mem_data_mem_addr_bus.OUT());
-	memwb_r.memory_data.connectsTo(data_mem.READ());
+//	memwb_r.memory_data.connectsTo(data_mem.READ());
+	memwb_r.c.connectsTo(data_mem.READ());
 	exmem_r.b.connectsTo(data_mem.WRITE());
 
 	exmem_r.pc.connectsTo(mem_pc_forward.IN());
@@ -116,6 +117,18 @@ void connect_components(void) {
 
 	memwb_r.ir.connectsTo(wb_ir_forward.IN());
 	post_wb_r.ir.connectsTo(wb_ir_forward.OUT());
+
+
+
+
+	//forwarding connections
+	exmem_r.c.connectsTo(idex_a_fill.IN());
+	memwb_r.c.connectsTo(idex_a_fill.IN());
+	idex_r.a.connectsTo(idex_a_fill.OUT());
+
+	exmem_r.c.connectsTo(idex_b_fill.IN());
+	memwb_r.c.connectsTo(idex_b_fill.IN());
+	idex_r.b.connectsTo(idex_b_fill.OUT());
 }
 
 void connect_reg_file_to_bus_input(Bus &b) {
