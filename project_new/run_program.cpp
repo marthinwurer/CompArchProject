@@ -85,6 +85,39 @@ bool halted = false;
 	void decode_sign_extend_branch_offset(void);
 
 	/**
+	 * Within the decode stage, move the contents of the instructions 'rs'
+	 * register (or a forwarded value that will be written to that
+	 * register) into the decode stage temp register.
+	 */
+	void decode_load_rs_into_temp(void);
+
+	/**
+	 * Within the decode stage, get the value that should be used for the
+	 * value in the 'rs' register specified by the branch instruction.
+	 * This function may simply pull the value out of the register, or may
+	 * retrieve (forward) it from a later stage in the pipeline that is
+	 * going to update the register specified as 'rs' in the branch
+	 * instruction.
+	 *
+	 * @returns The value contained in the 'rs' register for the
+	 *	instruction in the IF/ID pipeline register.
+	 */
+	long decode_get_branch_rs_value(void);
+
+	/**
+	 * Within the decode stage, get the value that should be used for the
+	 * value in the 'rt' register specified by the branch instruction.
+	 * This function may simply pull the value out of the register, or may
+	 * retrieve (forward) it from a later stage in the pipeline that is
+	 * going to update the register specified as 'rt' in the branch
+	 * instruction.
+	 *
+	 * @returns The value contained in the 'rt' register for the
+	 *	instruction in the IF/ID pipeline register.
+	 */
+	long decode_get_branch_rt_value(void);
+
+	/**
 	 * Set up the CPU operations for the first tick (of two) in the
 	 * decode stage for the current cycle.
 	 * Performs necessary first-tick operations for instructions that need
@@ -112,26 +145,24 @@ bool halted = false;
 	/**
 	 * Determine what general purpose register (if any) is going to be
 	 * written to by the instruction currently in the EX/MEM pipeline
-	 * register. Consideration is limited to those instruction types for
-	 * which forwarding is expected to be implemented
+	 * register.
 	 *
 	 * @return The index number of the GPR that will be written, or 0
 	 *	if no GPR will be written by the instruction (note that GPR 0
 	 *	cannot have its value overwritten, so returning 0 for
-	 *	"no write" does not interfere with the resutls.
+	 *	"no write" does not interfere with the results).
 	 */
 	long gpr_written_by_mem_stage_instruction(void);
 
 	/**
 	 * Determine what general purpose register (if any) is going to be
 	 * written to by the instruction currently in the MEM/WB pipeline
-	 * register. Consideration is limited to those instruction types for
-	 * which forwarding is expected to be implemented
+	 * register.
 	 *
 	 * @return The index number of the GPR that will be written, or 0
 	 *	if no GPR will be written by the instruction (note that GPR 0
 	 *	cannot have its value overwritten, so returning 0 for
-	 *	"no write" does not interfere with the resutls.
+	 *	"no write" does not interfere with the results).
 	 */
 	long gpr_written_by_wb_stage_instruction(void);
 
@@ -206,8 +237,10 @@ bool halted = false;
 	/**
 	 * Set up the CPU operations for the first tick (of two) in the
 	 * writeback stage for the current cycle.
-	 * No operations are performed on the first tick for the writeback
-	 * stage. This function is left as a placeholder.
+	 * Tick 1 of the writeback stage forwards results to the
+	 * post-writeback pipeline register (for instructions tracing), writes
+	 * retuls values into GPRs, and marks the CPU as halted on invalid,
+	 * unimplemented, or halt instructions.
 	 */
 	void writeback_part1(void);
 
@@ -225,10 +258,8 @@ bool halted = false;
 	/**
 	 * Set up the CPU operations for the second tick (of two) in the
 	 * writeback stage for the current cycle.
-	 * Tick 2 of the writeback stage forwards results to the
-	 * post-writeback pipeline register (for instructions tracing), writes
-	 * retuls values into GPRs, and marks the CPU as halted on invalid,
-	 * unimplemented, or halt instructions.
+	 * No operations are performed on the second tick for the writeback
+	 * stage. This function is left as a placeholder.
 	 */
 	void writeback_part2(void);
 
@@ -253,6 +284,55 @@ bool halted = false;
 /***********************************
  * Stalling functions              *
  ***********************************/
+
+	/**
+	 * Determine if the instruction currently in the IF/ID pipeline
+	 * register will need to be stalled because it uses the value stored
+	 * in a register that will be written by a load instruction currently
+	 * in the ID/EX pipeline register.
+	 *
+	 * @return True if we must stall for this reason, false otherwise.
+	 */
+	bool must_stall_id_phase_due_to_load_in_idex_register(void);
+
+	/**
+	 * Determine if the instruction currently in the IF/ID pipeline
+	 * register will need to be stalled because it uses the value stored
+	 * in a register that will be written by a load instruction currently
+	 * in the EX/MEM pipeline register. In particular, instructions that
+	 * use the value of a register within the decode stage (branches,
+	 * jumps, etc.) will need to wait if they pull from a register that
+	 * will be written to by a load instruction in the memory stage.
+	 *
+	 * @return True if we must stall for this reason, false otherwise.
+	 */
+	bool must_stall_id_phase_due_to_load_in_exmem_register(void);
+
+	/**
+	 * Determine what general purpose register (if any) is going to be
+	 * written to by the instruction currently in the ID/EX pipeline
+	 * register.
+	 *
+	 * @return The index number of the GPR that will be written, or 0
+	 *	if no GPR will be written by the instruction (note that GPR 0
+	 *	cannot have its value overwritten, so returning 0 for
+	 *	"no write" does not interfere with the resutls).
+	 */
+	long gpr_written_by_ex_stage_instruction(void);
+
+	/**
+	 * Determine if the instruction currently in the IF/ID pipeline
+	 * register will need to be stalled because it uses the value stored
+	 * in a register that will be written by an instruction (of any type)
+	 * currently in the ID/EX pipeline register. In particular,
+	 * instructions like branches and jumps, that use value they retrieve
+	 * in the decode stage, will need to wait if the value they need to
+	 * retrieve is currently being calculated by an instruction in the
+	 * execute stage.
+	 *
+	 * @return True if we must stall for this reason, false otherwise.
+	 */
+	bool must_stall_id_phase_to_use_result_in_id_phase(void);
 
 	/**
 	 * Determine if the instruction in the IF/ID pipeline register must be
@@ -356,12 +436,161 @@ void decode_sign_extend_branch_offset(void) {
 	id_temp_reg.latchFrom(id_imm_alu.OUT());
 }
 
+void decode_load_rs_into_temp(void) {
+	/* For instructions that use the values they fetch from GPRs before
+		they reach the execute stage, we will need to do either
+		forwarding or stalling. The implemented instructions that do
+		this are all of the variable shift instructions, which
+		retrieve the shift amount from a GPR in the decode phase
+		(storing it into the 'imm' field of the ID/EX pipeline
+		register), and the two jump register instructions
+		(JR and JALR) which use the contents of a register as a target
+		address. We break this set of instructions into the following
+		cases, which we handle as listed:
+
+		If the register being used will be written by the instruction
+		in the MEM/WB pipeline register:
+
+			Forward that result from MEM/WB register back to
+			ID stage.
+
+		Else, if the register being used will be written by the
+		instruction in the EX/MEM pipeline register and that
+		instruction is NOT a load (ie: the result that will be written
+		is already known):
+
+			Forward that result from EX/MEM register back to ID
+			stage.
+
+		Else, if the register being used will be written by the
+		instruction in the EX/MEM pipeline register and that
+		instruction IS a load (ie: the result that will be written
+		will not be known until the end of this cycle):
+
+			Stall the instruction in the IF/ID pipeline register.
+
+		Else, if the register being used will be written by the
+		instruction in the ID/EX pipeline register (ie: the result
+		that will be written will no be known until the end of this
+		cycle):
+
+			Stall the instruction in the IF/ID pipeline register.
+
+
+	This 'decode_load_rs_into_temp' function handles the above cases where
+		forwarding is required, while the stalling cases are handled
+		in the 'must_stall_id_phase' function. */
+
+
+
+	//get GPR written to by mem stage instruction (if any)
+	long mem_stage_gpr = ((exmem_r.valid()) ?
+		gpr_written_by_mem_stage_instruction() : 0);
+	//get GPR written to by wb stage instruction (if any)
+	long wb_stage_gpr = ((memwb_r.valid()) ?
+		gpr_written_by_wb_stage_instruction() : 0);
+
+	//if 'rs' written by instrucion in mem stage
+	if((mem_stage_gpr) && (mem_stage_gpr == RS(ifid_r.ir))) {
+		id_temp_reg_load_bus.IN().pullFrom(exmem_r.c);
+	}
+	//otherwise, if 'rs' written by instruction in wb stage
+	if((wb_stage_gpr) && (wb_stage_gpr == RS(ifid_r.ir))) {
+		id_temp_reg_load_bus.IN().pullFrom(memwb_r.c);
+	}
+	/* no conflict occurs with mem or wb stage instruction
+		=> no forwarding needed (conflicts with instructions in
+		execute stage are handled by stalling) */
+	else {
+		//load 'rs' into temp register
+		id_temp_reg_load_bus.IN().pullFrom(
+			GPR(RS(ifid_r.ir)));
+	}
+
+	id_temp_reg.latchFrom(id_temp_reg_load_bus.OUT());
+}
+
+long decode_get_branch_rs_value(void) {
+	/* In a situation that is very similar to the above
+		'decode_load_rs_into_temp' function, branch instructions use
+		the value in the 'rs' register in the decode stage to
+		determine whether a branch is taken or not. However,
+		instructions that come before a branch instruction may change
+		the value in this register, so we need to read the value that
+		will be written by the most recent instruction that does so.
+
+		This is essentially forwarding, except it forwards values to
+		the "control hardware" (ie: the C++ code) rather than the data
+		hardware.
+
+		Stalling also must be used in cases where the instruction
+		immediately before a branch (or a load instruction up to 2
+		instructions before a branch) writes one of the registers it
+		uses for its check. See	'must_stall_id_phase' function for
+		details. */
+
+	//get GPR written to by mem stage instruction (if any)
+	long mem_stage_gpr = ((exmem_r.valid()) ?
+		gpr_written_by_mem_stage_instruction() : 0);
+	//get GPR written to by wb stage instruction (if any)
+	long wb_stage_gpr = ((memwb_r.valid()) ?
+		gpr_written_by_wb_stage_instruction() : 0);
+
+	//if 'rs' written by instrucion in mem stage
+	if((mem_stage_gpr) && (mem_stage_gpr == RS(ifid_r.ir))) {
+		/* return value to be written to 'rs' by instruction in EX/MEM
+			pipeline register */
+		return exmem_r.c.value();
+	}
+	//otherwise, if 'rs' written by instruction in wb stage
+	if((wb_stage_gpr) && (wb_stage_gpr == RS(ifid_r.ir))) {
+		/* return value to be written to 'rs' by instruction in MEM/WB
+			pipeline register */
+		return memwb_r.c.value();
+	}
+
+	/* otherwise, there are no conflicts, and we can just use the existing
+		value in 'rs' */
+	GPR(RS(ifid_r.ir)).value();
+}
+
+long decode_get_branch_rt_value(void) {
+	/* This is the same as the above 'decode_get_branch_rs_value'
+		function, except for the 'rt' value used by a branch. See the
+		comments in that function for details. */
+
+	//get GPR written to by mem stage instruction (if any)
+	long mem_stage_gpr = ((exmem_r.valid()) ?
+		gpr_written_by_mem_stage_instruction() : 0);
+	//get GPR written to by wb stage instruction (if any)
+	long wb_stage_gpr = ((memwb_r.valid()) ?
+		gpr_written_by_wb_stage_instruction() : 0);
+
+	//if 'rt' written by instrucion in mem stage
+	if((mem_stage_gpr) && (mem_stage_gpr == RT(ifid_r.ir))) {
+		/* return value to be written to 'rt' by instruction in EX/MEM
+			pipeline register */
+		return exmem_r.c.value();
+	}
+	//otherwise, if 'rt' written by instruction in wb stage
+	if((wb_stage_gpr) && (wb_stage_gpr == RT(ifid_r.ir))) {
+		/* return value to be written to 'rt' by instruction in MEM/WB
+			pipeline register */
+		return memwb_r.c.value();
+	}
+
+	/* otherwise, there are no conflicts, and we can just use the existing
+		value in 'rt' */
+	return GPR(RT(ifid_r.ir)).value();
+}
+
 void decode_part1(void) {
 	//only continue if a valid instruction is waiting to be decoded
 	if(!ifid_r.valid.value()) {
 		return;
 	}
 
+	long t1, t2;
 
 	switch(decode_instruction(ifid_r.ir)) {
 		//non-variable shift operations
@@ -381,11 +610,9 @@ void decode_part1(void) {
 		case z11::SRAV:
 		case z11::JR:
 		case z11::JALR:
-			//load 'rs' into temp register
-			id_temp_reg_load_bus.IN().pullFrom(
-				GPR(RS(ifid_r.ir)));
-			id_temp_reg.latchFrom(
-				id_temp_reg_load_bus.OUT());
+			/* load 'rs' (or value that will be written into 'rs'
+				by earlier instruction) into temp register */
+			decode_load_rs_into_temp();
 			break;
 
 		//jump instructions
@@ -401,9 +628,10 @@ void decode_part1(void) {
 		case z11::BEQ:
 			//sign extend the branch offset and set 'cond' bit
 			decode_sign_extend_branch_offset();
-			if(GPR(RS(ifid_r.ir)).value() ==
-				GPR(RT(ifid_r.ir)).value()) {
-
+			t1 = decode_get_branch_rs_value();
+			t2 = decode_get_branch_rt_value();
+//			std::cout << "comparing " << t1 << " and " << t2 << std::endl;
+			if(t1 == t2) {
 				idex_r.cond.set();
 			}
 			else {idex_r.cond.clear();}
@@ -413,8 +641,8 @@ void decode_part1(void) {
 		case z11::BNE:
 			//sign extend the branch offset and set 'cond' bit
 			decode_sign_extend_branch_offset();
-			if(GPR(RS(ifid_r.ir)).value() !=
-				GPR(RT(ifid_r.ir)).value()) {
+			if(decode_get_branch_rs_value() !=
+				decode_get_branch_rt_value()) {
 
 				idex_r.cond.set();
 			}
@@ -530,12 +758,24 @@ void decode_part2(void) {
 
 long gpr_written_by_mem_stage_instruction(void) {
 	z11::op instruction = decode_instruction(exmem_r.ir);
+
+	/* don't need to worry about load instructions here, as the
+		instructions that come after them and use the register they
+		load into will be stalled */
+
 	if(is_register_alu_instruction(instruction)) {
 		return RD(exmem_r.ir);
 	}
 	else if(is_immediate_alu_instruction(instruction)) {
 		return RT(exmem_r.ir);
 	}
+	else if(instruction == z11::JALR) {
+		return RD(exmem_r.ir);
+	}
+	else if(instruction == z11::JAL) {
+		return 31;
+	}
+
 
 	return 0;
 }
@@ -550,6 +790,12 @@ long gpr_written_by_wb_stage_instruction(void) {
 	}
 	else if(is_load_instruction(instruction)) {
 		return RT(memwb_r.ir);
+	}
+	else if(instruction == z11::JALR) {
+		return RD(exmem_r.ir);
+	}
+	else if(instruction == z11::JAL) {
+		return 31;
 	}
 
 	return 0;
@@ -590,8 +836,12 @@ void execute_part1(void) {
 		idex_r.a.latchFrom(idex_a_fill.OUT());
 	}
 
-	//if we use 'rt' (ie: we are R-R ALU)
-	if(is_register_alu_instruction(instruction)) {
+	//if we use 'rt' (ie: we are R-R ALU, store, SLT, or SLTU)
+	if(is_register_alu_instruction(instruction) ||
+		is_store_instruction(instruction) ||
+		//this also captures 'SLTI', but that doesn't change anything
+		is_set_if_less_than_instruction(instruction)) {
+
 		//if 'rt' written by instrucion in mem stage
 		if((mem_stage_gpr) && (mem_stage_gpr == RT(idex_r.ir))) {
 			//forward from mem stage
@@ -700,7 +950,7 @@ void execute_part2(void) {
 			ex_alu.perform(BusALU::op_lshift);
 			break;
 		case z11::SLTI:
-			if(((int32_t)GPR(RS(idex_r.ir)).value()) <
+			if(((int32_t)idex_r.a.value()) <
 				((int32_t)idex_r.imm.value())) {
 
 				ex_alu.perform(BusALU::op_one);
@@ -711,8 +961,8 @@ void execute_part2(void) {
 			exmem_r.c.latchFrom(ex_alu.OUT());
 			break;
 		case z11::SLT:
-			if(((int32_t)GPR(RS(idex_r.ir)).value()) <
-				((int32_t)GPR(RT(idex_r.ir)).value())) {
+			if(((int32_t)idex_r.a.value()) <
+				((int32_t)idex_r.b.value())) {
 
 				ex_alu.perform(BusALU::op_one);
 			}
@@ -722,8 +972,8 @@ void execute_part2(void) {
 			exmem_r.c.latchFrom(ex_alu.OUT());
 			break;
 		case z11::SLTU:
-			if(((uint32_t)GPR(RS(idex_r.ir)).value()) <
-				((uint32_t)GPR(RT(idex_r.ir)).value())) {
+			if(((uint32_t)idex_r.a.value()) <
+				((uint32_t)idex_r.b.value())) {
 
 				ex_alu.perform(BusALU::op_one);
 			}
@@ -863,17 +1113,7 @@ void memory_part2(void) {
 	}
 }
 
-void writeback_part1(void) {}
-
-void writeback_to_GPR(int gpr_num, StorageObject &src) {
-	//r0 can't be overwritten
-	if(gpr_num == 0) {return;}
-
-	wb_register_write_bus.IN().pullFrom(src);
-	GPR(gpr_num).latchFrom(wb_register_write_bus.OUT());
-}
-
-void writeback_part2(void) {
+void writeback_part1(void) {
 	//forward valid bit
 	wb_valid_forward.IN().pullFrom(memwb_r.valid);
 	post_wb_r.valid.latchFrom(wb_valid_forward.OUT());
@@ -951,6 +1191,16 @@ void writeback_part2(void) {
 			break;
 	}
 }
+
+void writeback_to_GPR(int gpr_num, StorageObject &src) {
+	//r0 can't be overwritten
+	if(gpr_num == 0) {return;}
+
+	wb_register_write_bus.IN().pullFrom(src);
+	GPR(gpr_num).latchFrom(wb_register_write_bus.OUT());
+}
+
+void writeback_part2(void) {}
 
 void print_break_information(void) {
 	std::cout << std::endl << "   ";
@@ -1077,14 +1327,16 @@ void print_execution_record(void) {
 	}
 }
 
-bool must_stall_id_phase(void) {
-	//if load instruction in ID/EX
+
+bool must_stall_id_phase_due_to_load_in_idex_register(void) {
+	z11::op ifid_ins = decode_instruction(ifid_r.ir);
+
+	//if load instruction in ID/EX (immediately/"one place" ahead)
 	if(idex_r.valid.value() &&
 		is_load_instruction(decode_instruction(idex_r.ir))) {
 
-		/* if IF/ID instruction is (R-R ALU, ALU imm, load, store,
-			branch, JR, JALR) */
-		z11::op ifid_ins = decode_instruction(ifid_r.ir);
+		/* if IF/ID instruction uses contents of 'rs' (ie: is an
+			R-R ALU, ALU imm, load, store, branch, JR, JALR) */
 		if(is_register_alu_instruction(ifid_ins) ||
 			is_immediate_alu_instruction(ifid_ins) ||
 			is_load_instruction(ifid_ins) ||
@@ -1100,8 +1352,11 @@ bool must_stall_id_phase(void) {
 			}
 		}
 
-		//if IF/ID instruction is R-R ALU:
-		if(is_register_alu_instruction(ifid_ins)) {
+		/* if IF/ID instruction uses 'rt' (ie: is R-R ALU, branch, or
+			store): */
+		if(is_register_alu_instruction(ifid_ins) ||
+			is_branch_instruction(ifid_ins) ||
+			is_store_instruction(ifid_ins)) {
 			/* check the load's 'rt' against the other
 				instruction's 'rt' */
 			if(RT(idex_r.ir) == RT(ifid_r.ir)) {
@@ -1111,19 +1366,34 @@ bool must_stall_id_phase(void) {
 		}
 	}
 
-	//if load instruction in EX/MEM
+	return false;
+}
+
+bool must_stall_id_phase_due_to_load_in_exmem_register(void) {
+	z11::op ifid_ins = decode_instruction(ifid_r.ir);
+
+	//if load instruction in EX/MEM ("two places" ahead)
 	if(exmem_r.valid.value() &&
 		is_load_instruction(decode_instruction(exmem_r.ir))) {
 
-		//if IF/ID instruction is branch
-		if(is_branch_instruction(decode_instruction(ifid_r.ir))) {
+		/* if IF/ID instruction uses contents of 'rs' register in
+			decode stage (ie: is a branch, jump register, or
+			shift variable) */
+		if(is_branch_instruction(ifid_ins) ||
+			is_jump_register_instruction(ifid_ins) ||
+			is_variable_shift_instruction(ifid_ins)) {
+
 			/* check the load's 'rt' against the other
 				instructions 'rs' */
 			if(RT(exmem_r.ir) == RS(ifid_r.ir)) {
 				//if the same, stall
 				return true;
 			}
+		}
 
+		/* if IF/ID uses contents of 'rt' register in decode stage
+			(ie: is a branch) */
+		if(is_branch_instruction(decode_instruction(ifid_r.ir))) {
 			/* check the load's 'rt' against the other
 				instructions 'rt' */
 			if(RT(exmem_r.ir) == RT(ifid_r.ir)) {
@@ -1134,6 +1404,77 @@ bool must_stall_id_phase(void) {
 	}
 
 	return false;
+}
+
+long gpr_written_by_ex_stage_instruction(void) {
+	z11::op instruction = decode_instruction(idex_r.ir);
+
+	if(is_load_instruction(instruction)) {
+		return RT(idex_r.ir);
+	}
+	if(is_register_alu_instruction(instruction)) {
+		return RD(idex_r.ir);
+	}
+	else if(is_immediate_alu_instruction(instruction)) {
+		return RT(idex_r.ir);
+	}
+	else if(instruction == z11::JALR) {
+		return RD(idex_r.ir);
+	}
+	else if(instruction == z11::JAL) {
+		return 31;
+	}
+
+	return 0;
+}
+
+bool must_stall_id_phase_to_use_result_in_id_phase(void) {
+	z11::op ifid_ins = decode_instruction(ifid_r.ir);
+
+	//get GPR written to by ex stage instruction (if any)
+        long ex_stage_gpr = ((idex_r.valid()) ?
+                gpr_written_by_ex_stage_instruction() : 0);
+
+	/* if instruction in IF/ID pipeline register uses contents of 'rs' in
+		branch stage */
+	if(is_branch_instruction(ifid_ins) ||
+		is_jump_register_instruction(ifid_ins) ||
+		is_variable_shift_instruction(ifid_ins)) {
+
+		/* and IF/ID instruction's 'rs' matched ID/EX instruction's
+			written GPR */
+		if((ex_stage_gpr) && (ex_stage_gpr == RS(ifid_r.ir))) {
+			/* we will have to wait until execution stage is done
+				in order to use its results */
+				return true;
+		}
+	}
+
+	/* if instruction in IF/ID pipeline register uses contents of 'rt' in
+		branch stage (ie: is a branch instruction) */
+	if(is_branch_instruction(ifid_ins)) {
+		/* and IF/ID instruction's 'rt' matched ID/EX instruction's
+			written GPR */
+		if((ex_stage_gpr) && (ex_stage_gpr == RT(ifid_r.ir))) {
+			/* we will have to wait until execution stage is done
+				in order to use its results */
+				return true;
+		}
+	}
+
+	return false;
+}
+
+bool must_stall_id_phase(void) {
+	//only continue if a valid instruction is waiting to be decoded
+	if(!ifid_r.valid.value()) {
+		return false;
+	}
+
+	//if any of these cases happen, we need to stall
+	return (must_stall_id_phase_due_to_load_in_idex_register() ||
+		must_stall_id_phase_due_to_load_in_exmem_register() ||
+		must_stall_id_phase_to_use_result_in_id_phase());
 }
 
 void insert_nop_into_idex_reg(void) {

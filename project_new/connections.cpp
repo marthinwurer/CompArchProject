@@ -272,6 +272,12 @@ void make_connections_for_forwarding(void) {
 	exmem_r.c.connectsTo(idex_b_fill.IN());
 	memwb_r.c.connectsTo(idex_b_fill.IN());
 	idex_r.b.connectsTo(idex_b_fill.OUT());
+
+	/* for forwarding execution results that write the 'rs' register of
+		instructions that use the value in that register in the decode
+		stage */
+	exmem_r.c.connectsTo(id_temp_reg_load_bus.IN());
+	memwb_r.c.connectsTo(id_temp_reg_load_bus.IN());
 }
 
 void make_connections_for_stalling(void) {

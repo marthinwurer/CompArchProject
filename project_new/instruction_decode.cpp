@@ -249,3 +249,25 @@ bool is_branch_instruction(z11::op instruction) {
 bool is_jump_register_instruction(z11::op instruction) {
 	return ((instruction == z11::JR) || (instruction == z11::JALR));
 }
+
+bool is_variable_shift_instruction(z11::op instruction) {
+	switch(instruction) {
+		case z11::SLLV:
+		case z11::SRLV:
+		case z11::SRAV:
+			return true;
+	}
+
+	return false;
+}
+
+bool is_set_if_less_than_instruction(z11::op instruction) {
+	switch(instruction) {
+		case z11::SLT:
+		case z11::SLTU:
+		case z11::SLTI:
+			return true;
+	}
+
+	return false;
+}

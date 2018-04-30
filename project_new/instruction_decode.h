@@ -160,4 +160,22 @@ bool is_branch_instruction(z11::op instruction);
  */
 bool is_jump_register_instruction(z11::op instruction);
 
+/**
+ * Determine if the specified instruction is a shift variable instruction.
+ *
+ * @param instruction The instruction to test.
+ * @returns True if the specified instruction is a SLLV, SRLV, or SRAV
+ *	instruction, false otherwise.
+ */
+bool is_variable_shift_instruction(z11::op instruction);
+
+/**
+ * Determine if the specified instruction is a set if less than instruction.
+ *
+ * @param instruction The instruction to test.
+ * @returns True if the specified instruction is a SLTI, SLT, or SLTU
+ *	instruction, false otherwise.
+ */
+bool is_set_if_less_than_instruction(z11::op instruction);
+
 #endif // _INSTRUCTION_DECODE_H_
